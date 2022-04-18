@@ -80,7 +80,8 @@ dat.working <- dat %>%
          balance = scale2sd(balance),
          duration = scale2sd(duration),
          previous = scale2sd(previous)) %>% # put continuous vars on same scale as indicators
-  mutate_if(is.character, as.factor) # convert character to factor
+  mutate_if(is.character, as.factor) %>% # convert character to factor
+  slice_sample(prop = 0.3) # select subset
 
 summary(dat.working)
 
@@ -88,9 +89,9 @@ summary(dat.working)
 dat.working %>% group_by(y) %>% summarize(count=n())
 
 
-#downsampling
-set.seed(100)
-dat.downsampled <- downSample(x=dat.working[,-ncol(dat.working)], y=dat.working$y)
+# #downsampling
+# set.seed(100)
+# dat.downsampled <- downSample(x=dat.working[,-ncol(dat.working)], y=dat.working$y)
 
 # select training and testing data
 set.seed(100)

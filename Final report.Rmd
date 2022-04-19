@@ -8,8 +8,9 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-pkgs <- list('tidyverse', 'table1', 'e1071', 'caret', 'ROCR')
+pkgs <- list('tidyverse', 'table1', 'e1071', 'caret', 'ROCR','devtools')
 lapply(pkgs, require, character.only = T)
+load_all('./final')
 ```
 
 ## Data pre-processing
@@ -81,7 +82,7 @@ dat.working <- dat %>%
          duration = scale2sd(duration),
          previous = scale2sd(previous)) %>% # put continuous vars on same scale as indicators
   mutate_if(is.character, as.factor) %>% # convert character to factor
-  slice_sample(prop = 0.3) # select subset
+  slice_sample(prop = 0.2) # select subset
 
 summary(dat.working)
 
@@ -190,7 +191,22 @@ model <- glmnet(x, y, family = "binomial", alpha = 0, lambda = cv.ridge$lambda.m
 coef(model)
 
 x.test <- model.matrix(y~., dat_test)[,-1]
-probabilities <- model %>% predict(newx = x.test, type='response')
+probabilities.glmnet <- model %>% predict(newx = x.test, type='response')
+
+## our ridge LR code
+set.seed(100)
+t0 = Sys.time()
+lambdas = seq(-5,1,length.out=10)
+cv.ridgeLR <- cv.glm.logit.ridge(x, y, lambdas,fold=5)
+print(Sys.time() - t0)
+model.ridge <- glm.logit.ridge(x, y, lambda = cv.ridgeLR$lambda.min)
+x.test <- model.matrix(y~., dat_test)[,-1]
+probabilities <- predict.logistic(model.ridge, x.test)$prob
+##
+
+
+
+
 
 # Model performance
 predicted.classes <- ifelse(probabilities > 0.5, "yes", "no")

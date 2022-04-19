@@ -27,7 +27,7 @@ logLik <- function(eta, y){
 #' @return FILL ME IN
 #' 
 #' @export
-glm.logit.ridge <- function(X, y, lambda=1, tol = 1e-7, maxit = 50) {
+glm.logit.ridge <- function(X, y, lambda=1, tol = 1e-7, maxit = 50,trace=FALSE) {
   
   n = dim(X)[1]
   p = dim(X)[2]
@@ -68,14 +68,16 @@ glm.logit.ridge <- function(X, y, lambda=1, tol = 1e-7, maxit = 50) {
     
     
     # print out info to keep track
-    cat(
-      sprintf(
-        "Iter: %d logL: %.2f eps:%f\n",
-        iter,
-        logL,
-        eps
+    if(trace){
+      cat(
+        sprintf(
+          "Iter: %d logL: %.2f eps:%f\n",
+          iter,
+          logL,
+          eps
+        )
       )
-    )
+    }
   }
   
   
@@ -88,6 +90,73 @@ glm.logit.ridge <- function(X, y, lambda=1, tol = 1e-7, maxit = 50) {
     weights = plogis(X %*% beta_t) * (1 - plogis(X %*% beta_t))
   )
 }
+
+
+#' Cross validation for ridge logistic regression using design matrix and Y
+#' 
+#' FILL ME IN
+#' 
+#' @param X FILL ME IN
+#' 
+#' @return FILL ME IN
+#' 
+#' @export
+cv.glm.logit.ridge <- function(X, y, lambdas, fold=10) {
+  #lambdas = lambdas
+  CV = c()
+  for (j in 1:length(lambdas)){
+    
+    lambda = lambdas[j]
+    #index <- sample(1:fold, nrow(y), replace = T)
+    #idx.mat <- createDataPartition(y,times=fold ,p = 0.8, list = FALSE)
+    idx.cv.list = createFolds(y, k=fold, list=TRUE)
+    resid = 0
+    print(paste('lambda=',exp(lambda)))
+    for (i in 1: fold){
+      print(paste('fold ',i))
+      #cat(i)
+      idx_all = 1:length(y)
+      
+      #index_train <- idx.mat[,i]
+      #index_test <- idx_all[!idx_all %in% index_train]
+      
+      index_test <- idx.cv.list[[i]]
+      index_train <- idx_all[!idx_all %in% index_test]
+      
+      X.train <- X[index_train, ]
+      y.train <- y[index_train]
+      X.test <- X[index_test, ]
+      y.test <- y[index_test]
+      beta <- glm.logit.ridge(y=y.train, X=X.train, lambda = exp(lambda))$coefficients
+      #beta <- glmnet(x=X.train, y=y.train,  alpha=0, lambda = lambda,family='binomial')$beta
+      #y.hat = 1/(1+exp(-X.test%*%beta)) > 0.5
+      resid <- resid + sum((y.test - 1/(1+exp(-X.test%*%beta)))^2)
+      #resid <- resid + sum((y.test - y.hat)^2)
+    }
+    CV = c(CV, resid/length(y))
+  }
+  plot(lambdas, CV, type = "b",xlab='log(lambda)')
+  lambda = lambdas[which.min(CV)]
+  CVscore = min(CV)
+  print(paste0("tunning parameter (lambda.min) = ", exp(lambda), "; CV score = ", CVscore))
+  return(list(lambda.min=exp(lambda)))
+}
+
+
+#' FILL ME IN
+#' 
+#' @param fit FILL ME IN
+#' 
+#' @return FILL ME IN
+#' 
+#' @export
+predict.logistic <- function(fit, X, prob_cut = 0.5){
+  eta = X %*% fit$coefficients
+  y.prob = exp(eta)/(1 + exp(eta))
+  y = ifelse(y.prob > prob_cut, 1, 0)
+  return(list(y=y, prob=y.prob))
+}
+
 
 
 #' FILL ME IN

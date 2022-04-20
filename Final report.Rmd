@@ -8,7 +8,7 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-pkgs <- list('tidyverse', 'table1', 'e1071', 'caret', 'ROCR','devtools')
+pkgs <- list('tidyverse', 'table1', 'e1071', 'caret', 'ROCR', 'devtools', 'OptimalCutpoints')
 lapply(pkgs, require, character.only = T)
 load_all('./final')
 ```
@@ -122,30 +122,12 @@ ggplot(dat.working, aes(x = age, fill = y)) + geom_density(alpha = 0.5,position 
 
 ```
 
-
-
-```{r}
-library(treemapify)
-ggplot(dat_full, aes(
-  area =age , fill = job,label = job
-)) +
-  geom_treemap() +
-  geom_treemap_text(grow = T, reflow = T, colour = "black")
-```
-
-
-
-```{r}
-
-```
-
-
 ## SVM
 
 We'll use 5-fold cross validation to select the tuning parameter "cost".
 
 ```{r}
-# SVM: tune cost parameter 
+# Linear SVM: tune cost parameter 
 set.seed(100)
 start = Sys.time()
 tune.out=tune.svm(y~., data=dat_train, kernel ="linear", type='C-classification', 
@@ -165,18 +147,48 @@ confusionMatrix(svm.pred, dat_train$y, positive = 'yes')$byClass
 svm.pred.test <- predict(best.linear, dat_test %>% select(!'y'), probability=TRUE)
 confusionMatrix(svm.pred.test, dat_test$y, positive = 'yes')$byClass
 
+# Radial SVM: tune cost parameter
+set.seed(100)
+start = Sys.time()
+tune.out.radial=tune.svm(y~., data=dat_train, kernel ="radial", type='C-classification', 
+                  cost=c(0.001, 0.01, 0.1, 1),
+                  gamma=2^seq(-5,2,by=2),
+                  tunecontrol = tune.control(sampling = "cross", cross = 5),
+                  probability=TRUE)
+Sys.time() - start # 4 min
+
+# save object
+saveRDS(tune.out.radial, file = "radial_svm.RDS")
+
+summary(tune.out.radial)
+best.linear.radial = tune.out.radial$best.model
+
+# prediction on training dataset
+svm.pred.radial <- predict(best.linear.radial, dat_train %>% select(!'y'), probability=TRUE)
+confusionMatrix(svm.pred.radial, dat_train$y, positive = 'yes')$byClass
+
+# on testing dataset
+svm.pred.test.radial <- predict(best.linear.radial, dat_test %>% select(!'y'), probability=TRUE)
+confusionMatrix(svm.pred.test.radial, dat_test$y, positive = 'yes')$byClass
+
 # ROC curve using ROCR package
 pr <- prediction(attr(svm.pred.test, "probabilities")[,2], dat_test$y)
 prf <- performance(pr, measure="tpr", x.measure="fpr")
+
+pr.radial <- prediction(attr(svm.pred.test.radial, "probabilities")[,2], dat_test$y)
+prf.radial <- performance(pr.radial, measure="tpr", x.measure="fpr")
+
 plot(prf, col = "lightsteelblue", print.auc=TRUE, print.auc.x = 0.5, print.auc.y = 0.3)
+plot(prf.radial, add = TRUE, col = "orange", print.auc=TRUE, print.auc.x = 0.5, print.auc.y = 0.3)
+
 lines(x = c(0,1), y = c(0,1),col="black")
 performance(pr, measure = 'auc')@y.values %>% print() # AUC
+performance(pr.radial, measure = 'auc')@y.values %>% print() # AUC
 
 ```
 
 ## Ridge logistic regression
 
-(Here I am using glmnet as a substitute)
 
 ```{r}
 # ridge regression
@@ -204,24 +216,35 @@ x.test <- model.matrix(y~., dat_test)[,-1]
 probabilities <- predict.logistic(model.ridge, x.test)$prob
 ##
 
-
-
-
-
-# Model performance
-predicted.classes <- ifelse(probabilities > 0.5, "yes", "no")
-confusionMatrix(as_factor(predicted.classes), dat_test$y, positive = 'yes')$byClass
-
 # ROC curve using ROCR package
 pr.2 <- prediction(probabilities, dat_test$y)
 prf.2 <- performance(pr.2, measure="tpr", x.measure="fpr")
 plot(prf.2, col = "goldenrod", print.auc=TRUE, print.auc.x = 0.5, print.auc.y = 0.3)
 plot(prf, add=TRUE, col = "lightsteelblue", print.auc=TRUE, print.auc.x = 0.5, print.auc.y = 0.3)
+plot(prf.radial, add = TRUE, col = "orange", print.auc=TRUE, print.auc.x = 0.5, print.auc.y = 0.3)
 lines(x = c(0,1), y = c(0,1),col="black")
 legend("bottom",
-       legend=c("ridge", "svm"),
-       col=c("goldenrod", "lightsteelblue"),
+       legend=c("ridge", "linear svm", "radial svm"),
+       col=c("goldenrod", "lightsteelblue", "orange"),
        lwd=4, cex =0.8, xpd = TRUE, horiz = TRUE)
 
 performance(pr.2, measure = 'auc')@y.values %>% print()
+
+# Model performance - select logistic cutoff using training data
+pr.1 <- prediction(predict.logistic(model.ridge, x)$prob, dat_train$y)
+
+sens <- data.frame(x=unlist(performance(pr.1, "sens")@x.values), 
+                   y=unlist(performance(pr.1, "sens")@y.values))
+spec <- data.frame(x=unlist(performance(pr.1, "spec")@x.values), 
+                   y=unlist(performance(pr.1, "spec")@y.values))
+sens %>% ggplot(aes(x,y)) + 
+  geom_line() + 
+  geom_line(data=spec, aes(x,y,col="red")) +
+  scale_y_continuous(sec.axis = sec_axis(~., name = "Specificity")) +
+  labs(x='Cutoff', y="Sensitivity") +
+  theme(axis.title.y.right = element_text(colour = "red"), legend.position="none")
+
+cutoff <- 0.125
+predicted.classes <- ifelse(probabilities > cutoff, "yes", "no")
+confusionMatrix(as_factor(predicted.classes), dat_test$y, positive = 'yes')$byClass
 ```

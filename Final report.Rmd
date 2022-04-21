@@ -6,75 +6,78 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 
-pkgs <- list('tidyverse', 'table1', 'e1071', 'caret', 'ROCR', 'devtools', 'OptimalCutpoints')
+# load packages
+pkgs <- list('tidyverse', 'table1', 'e1071', 'caret', 'ROCR', 'devtools', 'OptimalCutpoints', 'car')
 lapply(pkgs, require, character.only = T)
 load_all('./final')
+
+# set ggplot theme
+theme_set(theme_bw())
+
+# read data
+dat_full <- read_delim("bank-full.csv", delim=';')
 ```
+
+## Introduction
+
+A central challenge in telemarketing is in targeting individuals to sell goods or services. It would be costly to indiscriminately canvas everyone, but it would also be undesirable to target a random subset of the population as many potential sales could be lost. Thus, there is great interest in tools to identify the groups of individuals for whom telemarketing would likely result in sales and the groups of whom telemarketing is unlikely to be successful. Then, the firm could save resources by ignoring those in the latter group while not losing out on potential sales. 
+
+In this project, we analyse a telemarketing dataset from a Portuguese retail bank [link], which contains information on clients who were contacted by phone call to sell term deposit subscriptions and the outcome of the contact, which is a binary indicator for if the client subscribed a term deposit. There were ___ observations and ___ features, which are summarized in Table \ref{}. [say a sentence about the data, missingness] The binary outcome variable is highly imbalanced, with __ failures and __ successes. 
+
+The goal of this project is to build a classifier using the covariates listed in Table \ref{} to predict whether or not that client subscribed a term deposit. We choose [the metric] as the criterion we will use to evaluate model performance. We used logistic regression with a ridge penalty and support vector machines (SVM) as the candidate models. We also developed an R package that can be used to replicate our analysis. All analysis materials are in our Github page [link]. 
+
+```{r}
+print('Insert table on features here')
+```
+
 
 ## Data pre-processing
 
-We'll use bank-full.csv and randomly select 30% data as our full working dataset.
+There are four datasets available. We choose the dataset with 16 features and all observations (called `bank-full.csv` on the source website). To ease computational burden, we randomly select 20 percent of the data for our analysis dataset, which includes __ observations.
 
-(I copied Shuang's code here. Maybe it needs further simplification.)
+[Can table1() be given a table caption + formatting]
+
+We dropped the variable `pdays` from the analysis dataset because [why?]. We also collapsed the job categories by income level and collapsed months into quarters. For job categories, "unknown" was kept as its own category, "unemployed" and "student" were considered "no income", ... [I'm not sure about these. blue-collar or self-employed is not necessarily low income, retired and student are kinda their own thing; admin, services, technician may be low income]. 
+
+Continuous variables were centered and scaled by two standard deviations to be put on approximately the same scale as categorical covariates [cite Gelman paper]. 
+
+We hold out 20 percent of the data as a test set for final model performance evaluation. The remaining 80 percent of the data is used as training data to select hyperparameters in the logistic regression and SVM models. 
 
 ```{r}
-## read data
-dat_full <- read_delim("bank-full.csv",
-           delim=';')
-
-## overview
+## overview of features by outcome
 table1(~.|y, data = dat_full)
+```
 
-#check null
-sum(is.na(dat_full)) #0
-summary(dat_full)
 
-dat_full %>% group_by(education) %>% summarize(count=n())
-
-#visualization
-#library(corrplot)
-#new <- dat.downsampled[,c(1,6,10,12,13,14,15)]
-#res <- cor(new)
-#corrplot(res,type = "upper", order = "hclust", 
-#         tl.col = "black", tl.srt = 45)
-
-## combine the labels
-library(car)
-
+```{r}
+# combine the labels
 unknown <- c('unknown')
 no_income <- c('unemployed','student')
 low_income <- c('blue-collar','housemaid','retired','self-employed')
 high_income <- c('admin.','entrepreneur','management','services','technician')
 
-
-
-spring <- c('mar','feb','jan')
-summer <- c('apr','may','jun')
-autumn <- c('jul','aug','sep')
-winter <- c('nov','oct','dec')
-
-
+q1 <- c('mar','feb','jan')
+q2 <- c('apr','may','jun')
+q3 <- c('jul','aug','sep')
+q4 <- c('nov','oct','dec')
 
 dat_full$job<-recode(dat_full$job,"unknown='unknown'; no_income='no_income';
                       low_income = 'low_income'; high_income = 'high_income'")
 
-dat_full$month<-recode(dat_full$month,"spring='1_2_3'; summer='4_5_6';
-                      autumn = '7_8_9'; winter = '10_11_12'")
+dat_full$month<-recode(dat_full$month,"q1='1_2_3'; q2='4_5_6';
+                      q3 = '7_8_9'; q4 = '10_11_12'")
 
-# select variables (data pre-processing: keep consistent)
-#drop pdays
+# drop pdays
 dat = dat_full %>% select(-pdays)
 
+# NOTE: add this to R package
 scale2sd <- function(x) {
   (x - mean(x) )/ (2*sd(x))
 }
 
-
-```
-
-```{r}
+# analysis dataset
 dat.working <- dat %>% 
   mutate(age = scale2sd(age),
          campaign = scale2sd(campaign),
@@ -83,17 +86,9 @@ dat.working <- dat %>%
          previous = scale2sd(previous)) %>% # put continuous vars on same scale as indicators
   mutate_if(is.character, as.factor) %>% # convert character to factor
   slice_sample(prop = 0.2) # select subset
+```
 
-summary(dat.working)
-
-# check data imbalance
-dat.working %>% group_by(y) %>% summarize(count=n())
-
-
-# #downsampling
-# set.seed(100)
-# dat.downsampled <- downSample(x=dat.working[,-ncol(dat.working)], y=dat.working$y)
-
+```{r}
 # select training and testing data
 set.seed(100)
 y <- dat.working$y
@@ -109,9 +104,10 @@ dat_test <- dat.working[-index,]
 
 ```
 
-visualizations
+
+[format visualizations and give captions, reference in text]
+
 ```{r}
-library(ggplot2)
 ggplot(dat_full, aes(x = y, y = age)) + xlab('subscribed')+
   geom_boxplot(color = "steelblue")
 
@@ -119,132 +115,202 @@ ggplot(dat_full, aes(x = y, y = balance)) + xlab('subscribed')+
   geom_boxplot(color = "steelblue")
 
 ggplot(dat.working, aes(x = age, fill = y)) + geom_density(alpha = 0.5,position = 'stack')
-
 ```
 
-## SVM
 
-We'll use 5-fold cross validation to select the tuning parameter "cost".
+## Methods
 
-```{r}
-# Linear SVM: tune cost parameter 
-set.seed(100)
-start = Sys.time()
-tune.out=tune.svm(y~., data=dat_train, kernel ="linear", type='C-classification', 
-                  cost=c(0.001, 0.01, 0.1, 1, 5),
-                  tunecontrol = tune.control(sampling = "cross", cross = 5),
-                  probability=TRUE)
-Sys.time() - start # 4 min
+We choose logistic regression as our likelihood-based model since it allows for classification. We consider a ridge penalty here since penalization often improves prediction, which is the primary goal. A ridge penalty is chosen as opposed to a lasso penalty since the number of features is relatively few compared to the number of observations so feature selection may be unnecessary. 
 
-summary(tune.out)
-best.linear = tune.out$best.model
+Support vector machines were chosen for their flexibility and good out-of-box performance for classification. By fitting SVM using both linear and RBF kernels, we allow for flexibility in the relationship between the outcome and features. 
 
-# prediction on training dataset
-svm.pred <- predict(best.linear, dat_train %>% select(!'y'), probability=TRUE)
-confusionMatrix(svm.pred, dat_train$y, positive = 'yes')$byClass
 
-# on testing dataset
-svm.pred.test <- predict(best.linear, dat_test %>% select(!'y'), probability=TRUE)
-confusionMatrix(svm.pred.test, dat_test$y, positive = 'yes')$byClass
+### Logistic regression with ridge penalty
 
-# Radial SVM: tune cost parameter
-set.seed(100)
-start = Sys.time()
-tune.out.radial=tune.svm(y~., data=dat_train, kernel ="radial", type='C-classification', 
-                  cost=c(0.001, 0.01, 0.1, 1),
-                  gamma=2^seq(-5,2,by=2),
-                  tunecontrol = tune.control(sampling = "cross", cross = 5),
-                  probability=TRUE)
-Sys.time() - start # 4 min
+[describe our implementation]
 
-# save object
-saveRDS(tune.out.radial, file = "radial_svm.RDS")
+### SVM
 
-summary(tune.out.radial)
-best.linear.radial = tune.out.radial$best.model
+[describe SVM]
 
-# prediction on training dataset
-svm.pred.radial <- predict(best.linear.radial, dat_train %>% select(!'y'), probability=TRUE)
-confusionMatrix(svm.pred.radial, dat_train$y, positive = 'yes')$byClass
+### Model evaluation
 
-# on testing dataset
-svm.pred.test.radial <- predict(best.linear.radial, dat_test %>% select(!'y'), probability=TRUE)
-confusionMatrix(svm.pred.test.radial, dat_test$y, positive = 'yes')$byClass
+We used 5-fold cross validation to select tuning parameters for both logistic regression and SVM. For logistic regression with ridge penalty, there is a hyperparameter, $\lambda$ in our notation above, which controls the amount of penalization. We compare _ different values of $\lambda$, [list the values we test] and chose the $\lambda$ which minimized the mean-squared error. 
 
-# ROC curve using ROCR package
-pr <- prediction(attr(svm.pred.test, "probabilities")[,2], dat_test$y)
-prf <- performance(pr, measure="tpr", x.measure="fpr")
-
-pr.radial <- prediction(attr(svm.pred.test.radial, "probabilities")[,2], dat_test$y)
-prf.radial <- performance(pr.radial, measure="tpr", x.measure="fpr")
-
-plot(prf, col = "lightsteelblue", print.auc=TRUE, print.auc.x = 0.5, print.auc.y = 0.3)
-plot(prf.radial, add = TRUE, col = "orange", print.auc=TRUE, print.auc.x = 0.5, print.auc.y = 0.3)
-
-lines(x = c(0,1), y = c(0,1),col="black")
-performance(pr, measure = 'auc')@y.values %>% print() # AUC
-performance(pr.radial, measure = 'auc')@y.values %>% print() # AUC
-
-```
-
-## Ridge logistic regression
-
+For SVM, we used both a linear kernel and a radial basis function (RBF) kernel. SVM with a linear kernel contains a penalization hyperparameter, and SVM with an RBF kernel contains a penalization and [what does gamma control?] hyperparameters. For the linear kernel we test [enter values] and for the RBF kernel we test all combinations of [enter cost values] and [enter gamma values]. The error function to minimize was the mis-classification rate. 
 
 ```{r}
-# ridge regression
-library(glmnet)
+# fitting ridge logistic regression
+
+# get data into format for logistic regression
 x <- model.matrix(y~., dat_train)[,-1]
-y <- ifelse(dat_train$y == "yes", 1, 0)
+y2 <- ifelse(dat_train$y == "yes", 1, 0)
 
-set.seed(100)
-cv.ridge <- cv.glmnet(x, y, alpha = 0, family = "binomial")
+# # fit ridge logistc reg using glmnet
+# library(glmnet)
+# set.seed(100)
+# cv.ridge <- cv.glmnet(x, y2, alpha = 0, family = "binomial")
+# model <- glmnet(x, y, family = "binomial", alpha = 0, lambda = cv.ridge$lambda.min)
+# 
+# # get predictions for test set
+# x.test <- model.matrix(y~., dat_test)[,-1]
+# probabilities.glmnet <- model %>% predict(newx = x.test, type='response')
 
-model <- glmnet(x, y, family = "binomial", alpha = 0, lambda = cv.ridge$lambda.min)
-coef(model)
-
-x.test <- model.matrix(y~., dat_test)[,-1]
-probabilities.glmnet <- model %>% predict(newx = x.test, type='response')
-
-## our ridge LR code
+# our ridge LR code
 set.seed(100)
 t0 = Sys.time()
+
+# penalty parameters to test (on log-scale)
+# NOTE: should change function argument to make clear it is on log-scale e.g. name it loglambda
 lambdas = seq(-5,1,length.out=10)
-cv.ridgeLR <- cv.glm.logit.ridge(x, y, lambdas,fold=5)
-print(Sys.time() - t0)
-model.ridge <- glm.logit.ridge(x, y, lambda = cv.ridgeLR$lambda.min)
+
+# fit models using cv (read from file to save computation time)
+# cv.ridgeLR <- cv.glm.logit.ridge(x, y2, lambdas, fold=5)
+cv.ridgeLR = readRDS('cv_ridge.rds')
+# saveRDS(cv.ridgeLR, 'cv_ridge.rds')  # save cv object (o/w takes 13 mins to run)
+# print(Sys.time() - t0)
+
+# best ridge logistic reg model
+model.ridge <- glm.logit.ridge(x, y2, lambda = cv.ridgeLR$lambda.min)
+
+# get probability predictions on test set
 x.test <- model.matrix(y~., dat_test)[,-1]
-probabilities <- predict.logistic(model.ridge, x.test)$prob
-##
+probs.ridge.test <- predict.logistic(model.ridge, x.test)$prob
 
 # ROC curve using ROCR package
-pr.2 <- prediction(probabilities, dat_test$y)
-prf.2 <- performance(pr.2, measure="tpr", x.measure="fpr")
-plot(prf.2, col = "goldenrod", print.auc=TRUE, print.auc.x = 0.5, print.auc.y = 0.3)
-plot(prf, add=TRUE, col = "lightsteelblue", print.auc=TRUE, print.auc.x = 0.5, print.auc.y = 0.3)
-plot(prf.radial, add = TRUE, col = "orange", print.auc=TRUE, print.auc.x = 0.5, print.auc.y = 0.3)
-lines(x = c(0,1), y = c(0,1),col="black")
-legend("bottom",
-       legend=c("ridge", "linear svm", "radial svm"),
-       col=c("goldenrod", "lightsteelblue", "orange"),
-       lwd=4, cex =0.8, xpd = TRUE, horiz = TRUE)
+pr.ridge.test <- prediction(probs.ridge.test, dat_test$y)
+prf.ridge.test <- performance(pr.ridge.test, measure="tpr", x.measure="fpr")
 
-performance(pr.2, measure = 'auc')@y.values %>% print()
+# auc
+ridge.auc = performance(pr.ridge.test, measure = 'auc')@y.values[[1]]
+```
 
+
+```{r}
 # Model performance - select logistic cutoff using training data
-pr.1 <- prediction(predict.logistic(model.ridge, x)$prob, dat_train$y)
+pr.ridge.train <- prediction(predict.logistic(model.ridge, x)$prob, dat_train$y)
 
-sens <- data.frame(x=unlist(performance(pr.1, "sens")@x.values), 
-                   y=unlist(performance(pr.1, "sens")@y.values))
-spec <- data.frame(x=unlist(performance(pr.1, "spec")@x.values), 
-                   y=unlist(performance(pr.1, "spec")@y.values))
+# get sensitivity
+sens <- data.frame(x=unlist(performance(pr.ridge.train, "sens")@x.values), 
+                   y=unlist(performance(pr.ridge.train, "sens")@y.values))
+
+# get specificity
+spec <- data.frame(x=unlist(performance(pr.ridge.train, "spec")@x.values), 
+                   y=unlist(performance(pr.ridge.train, "spec")@y.values))
+
+# plot sensitivity and specificity as function of cost
 sens %>% ggplot(aes(x,y)) + 
   geom_line() + 
   geom_line(data=spec, aes(x,y,col="red")) +
   scale_y_continuous(sec.axis = sec_axis(~., name = "Specificity")) +
   labs(x='Cutoff', y="Sensitivity") +
   theme(axis.title.y.right = element_text(colour = "red"), legend.position="none")
-
-cutoff <- 0.125
-predicted.classes <- ifelse(probabilities > cutoff, "yes", "no")
-confusionMatrix(as_factor(predicted.classes), dat_test$y, positive = 'yes')$byClass
 ```
+
+
+```{r, echo=TRUE}
+# show performance metrics based off chosen cutoff
+cutoff <- 0.125
+predicted.classes <- ifelse(probs.ridge.test > cutoff, "yes", "no")
+confusionMatrix(factor(predicted.classes, levels = c('no', 'yes')), dat_test$y, positive = 'yes')$byClass
+```
+
+
+```{r}
+# Linear SVM: tune cost parameter 
+set.seed(100)
+# start = Sys.time()
+# cv.svm.lin = tune.svm(y~., data=dat_train, kernel ="linear", type='C-classification',
+#                       cost=c(0.001, 0.01, 0.1, 1, 5),
+#                       tunecontrol = tune.control(sampling = "cross", cross = 5),
+#                       probability=TRUE)
+# Sys.time() - start # 4 min
+
+# save/load for computational ease
+# saveRDS(cv.svm.lin, 'cv_sim_lin.rds')
+cv.svm.lin = readRDS('cv_sim_lin.rds')
+
+# pick best svm linear
+best.linear = cv.svm.lin$best.model
+
+
+# Radial SVM: tune cost parameter
+set.seed(100)
+# start = Sys.time()
+# cv.svm.rad = tune.svm(y~., data=dat_train, kernel ="radial", type='C-classification',
+#                       cost=c(0.001, 0.01, 0.1, 1),
+#                       gamma=2^seq(-5,2,by=2),
+#                       tunecontrol = tune.control(sampling = "cross", cross = 5),
+#                       probability=TRUE)
+# Sys.time() - start # 4 min
+
+# save/load for computational ease
+# saveRDS(cv.svm.rad, file = "radial_svm.RDS")
+cv.svm.rad = readRDS('radial_svm.RDS')
+
+# pick best svm radial
+best.radial = cv.svm.rad$best.model
+```
+
+```{r, echo=TRUE}
+# print confusion matrices
+# NOTE: what do we want to do with these? 
+# are we printing them out for our own understanding? 
+# or will they go in final report/pres?
+
+# training data; svm linear
+svm.pred.lin <- predict(best.linear, dat_train %>% select(!'y'), probability=TRUE)
+confusionMatrix(svm.pred.lin, dat_train$y, positive = 'yes')$byClass
+
+# test data; svm linear
+svm.pred.lin.test <- predict(best.linear, dat_test %>% select(!'y'), probability=TRUE)
+confusionMatrix(svm.pred.lin.test, dat_test$y, positive = 'yes')$byClass
+
+# training data; svm radial
+svm.pred.radial <- predict(best.radial, dat_train %>% select(!'y'), probability=TRUE)
+confusionMatrix(svm.pred.radial, dat_train$y, positive = 'yes')$byClass
+
+# test data; svm radial
+svm.pred.rad.test <- predict(best.radial, dat_test %>% select(!'y'), probability=TRUE)
+confusionMatrix(svm.pred.rad.test, dat_test$y, positive = 'yes')$byClass
+```
+
+
+```{r}
+
+# ROC curve using ROCR package
+pr.svm.lin.test <- prediction(attr(svm.pred.lin.test, "probabilities")[,2], dat_test$y)
+prf.svm.lin.test <- performance(pr.svm.lin.test, measure="tpr", x.measure="fpr")
+
+pr.svm.radial.test <- prediction(attr(svm.pred.rad.test, "probabilities")[,2], dat_test$y)
+prf.svm.radial.test <- performance(pr.svm.radial.test, measure="tpr", x.measure="fpr")
+
+# auc
+svm.lin.auc = performance(pr.svm.lin.test, measure = 'auc')@y.values
+svm.rad.auc = performance(pr.svm.radial.test, measure = 'auc')@y.values
+
+```
+
+
+```{r}
+plot(prf.ridge.test, col = "red", print.auc=TRUE, print.auc.x = 0.5, print.auc.y = 0.3)
+plot(prf.svm.lin.test, add = TRUE, col = "lightsteelblue", print.auc=TRUE, print.auc.x = 0.5, print.auc.y = 0.3)
+plot(prf.svm.radial.test, add = TRUE, col = "orange", print.auc=TRUE, print.auc.x = 0.5, print.auc.y = 0.3)
+lines(x = c(0,1), y = c(0,1),col="black")
+legend("bottom",
+       legend=c("ridge", "linear svm", "radial svm"),
+       col=c("red", "lightsteelblue", "orange"),
+       lwd=4, cex =0.8, xpd = TRUE, horiz = TRUE)
+```
+
+
+## Results
+
+The chosen $\lambda$ for ridge logistic regression was []. For the SVM models, the chosen penalization hyperparameter for the linear kernel was [], and for the RBF kernel, the chosen penalization and [] hyperparameters were [] and [], respectively. 
+
+[report metrics, describe figures/tables]
+
+
+## Discussion
+
+The mis-classification error for the best model was [10-11] percent, only slightly better than the mis-classification error achieved for the naive model of predicting failure for all clients (12 percent). 

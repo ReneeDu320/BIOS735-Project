@@ -3,6 +3,8 @@ title: "BIOS735 Group 6 Final project"
 author: "Group 6"
 date: "4/15/2022"
 output: html_document
+bibliography: references.bib  
+csl: biomed-central.csl
 ---
 
 ```{r setup, include=FALSE}
@@ -22,9 +24,9 @@ dat_full <- read_delim("bank-full.csv", delim=';')
 
 ## Introduction
 
-A central challenge in telemarketing is in targeting individuals to sell goods or services. It would be costly to indiscriminately canvas everyone, but it would also be undesirable to target a random subset of the population as many potential sales could be lost. Thus, there is great interest in tools to identify the groups of individuals for whom telemarketing would likely result in sales and the groups of whom telemarketing is unlikely to be successful. Then, the firm could save resources by ignoring those in the latter group while not losing out on potential sales. 
+A central challenge in telemarketing is in targeting individuals to sell goods or services. It would be costly to indiscriminately canvas everyone, but it would also be undesirable to target a random subset of the population as many potential sales could be lost. Thus, there is great interest in tools to identify the groups of individuals for whom telemarketing would likely result in sales and the groups of whom telemarketing is unlikely to be successful. Then, the firm could save resources by ignoring those in the latter group while not losing out on potential sales @marshall1988successfully. 
 
-In this project, we analyse a telemarketing dataset from a Portuguese retail bank [link], which contains information on clients who were contacted by phone call to sell term deposit subscriptions and the outcome of the contact, which is a binary indicator for if the client subscribed a term deposit. There were ___ observations and ___ features, which are summarized in Table \ref{}. [say a sentence about the data, missingness] The binary outcome variable is highly imbalanced, with __ failures and __ successes. 
+In this project, we analyse a telemarketing dataset from a Portuguese retail bank [link] @moro2014data, which contains information on clients who were contacted by phone call to sell term deposit subscriptions and the outcome of the contact, which is a binary indicator for if the client subscribed a term deposit. There were ___ observations and ___ features, which are summarized in Table \ref{}. [say a sentence about the data, missingness] The binary outcome variable is highly imbalanced, with __ failures and __ successes. 
 
 The goal of this project is to build a classifier using the covariates listed in Table \ref{} to predict whether or not that client subscribed a term deposit. We choose [the metric] as the criterion we will use to evaluate model performance. We used logistic regression with a ridge penalty and support vector machines (SVM) as the candidate models. We also developed an R package that can be used to replicate our analysis. All analysis materials are in our Github page [link]. 
 
@@ -39,7 +41,7 @@ There are four datasets available. We choose the dataset with 16 features and al
 
 [Can table1() be given a table caption + formatting]
 
-We dropped the variable `pdays` from the analysis dataset because [why?]. We also collapsed the job categories by income level and collapsed months into quarters. For job categories, "unknown" was kept as its own category, "unemployed" and "student" were considered "no income", ... [I'm not sure about these. blue-collar or self-employed is not necessarily low income, retired and student are kinda their own thing; admin, services, technician may be low income]. 
+We dropped the variable `pdays` from the analysis dataset because more than 80% of the data were missing for the variable. We also collapsed the job categories by income level and collapsed months into quarters. For job categories, "unknown" was kept as its own category, "unemployed" and "student" were considered "no income", ... [I'm not sure about these. blue-collar or self-employed is not necessarily low income, retired and student are kinda their own thing; admin, services, technician may be low income]. 
 
 Continuous variables were centered and scaled by two standard deviations to be put on approximately the same scale as categorical covariates [cite Gelman paper]. 
 
@@ -106,6 +108,7 @@ dat_test <- dat.working[-index,]
 
 
 [format visualizations and give captions, reference in text]
+(why do we only plot y vs age/balance? what about other numerical variables?)
 
 ```{r}
 ggplot(dat_full, aes(x = y, y = age)) + xlab('subscribed')+
@@ -127,11 +130,56 @@ Support vector machines were chosen for their flexibility and good out-of-box pe
 
 ### Logistic regression with ridge penalty
 
-[describe our implementation]
+We will use the logistic regression modelling framework. We have $i=1, 2, ... , n$ subjects. We observe the outcome $Y_{i}$ for subject $i$, and we observe the subject's covariates $x_{i}$.
+
+Assume $y_{i}|x_{i}\sim Binomial(1, p_{i})$ for $i=1, ..., n$;
+$logit(p_{i})=log(\frac{p_{i}}{1-p_{i}})=x_{i}^T\beta=\eta_{i}$ for $i=1, ..., n$. Thus, the log-likelihood function of $\beta$ for the logistic regression model is given by
+\begin{equation}
+	l_{n}(\beta)=\sum_{i=1}^{n}\left\{y_{i}x_{i}^T\beta-log(1+exp(x_{i}^T\beta)) \right\}
+\end{equation}
+We will use Newton-Raphson algorithm to obtain the ML estimate $\hat{\beta}$ in this GLM model by
+\begin{equation}
+\begin{aligned}
+	\beta^{(t+1)}&=\beta^{(t)}-l''(\beta^{(t+1)})^{-1}l'(\beta^{(t)})\\
+	&=\beta^{(t)}+(X^TW^{(t)}X)^{-1}X^T(Y-p^{(t)})\\
+	&=\beta^{(t)}+h^{(t)}
+\end{aligned}
+\end{equation}
+where $p^{(t)}$ depends on $\beta^{(t)}$ and $W$ is a diagonal matrix with the $i$th diagonal element having value equal to $p_{i}(1-p_{i})$. $W^{(t)}$ is a function of $p^{(t)}$.
+
+If we performed L2 regularization approach using ridge logistic regression @zou2005regularization. The objective function is the penalized log-likelihood, and is
+\begin{equation}
+	-\left[\frac{1}{N}\sum_{i=1}^{n}\left\{y_{i}x_{i}^T\beta-log(1+exp(x_{i}^T\beta)) \right\}\right]+\lambda(||\beta||_{2}),
+\end{equation}
+where $\lambda$ is a tuning parameter for the L2 the penalty. 
+Similarly to Newton-Rapson algorithm, the optimization function to obtain the ridge estimated $\hat{\beta}_{ridge}$, the coefficients of ridge logistic regression is given by
+
+$$
+\beta_{t+1} = \beta_t + (X^TWX + \lambda I_p)^{-1}X^T(y-p),
+$$
+where the $I_p$ is a $p$ by $p$ identity matrix.
+
+We used Iteratively Reweighted Least Squares (IRLS) @holland1977robust to perform optimization, and select the tuning parameter $\lambda$ using grid search for the $\lambda$ that yields the minimum mean square error (MSE) from cross-validation.
+
+
+
 
 ### SVM
 
-[describe SVM]
+Support vector machines (SVM) @cortes1995support are a popular machine learning method for binary classification. SVM classifies observations by separating the feature space into two classes with the goal of maximizing the number of correct classifications while allowing for some mis-classifications for identifiability and to prevent over-fitting. The form of the decision boundary is controlled by choice of the kernel function. We will fit SVM models using linear and radial kernels. 
+
+Formally, SVM solves the following Lagrangian dual
+
+\begin{equation}
+	\begin{split}
+		\max_{\substack{\alpha}}  \sum_{i=1}^{n} \alpha_i - \frac{1}{2} \sum_{i, j = 1}^{n} y_i y_j \alpha_i \alpha_j K(x_i, x_j) \\
+		\text{s.t. } 0 \leq \alpha_i \leq C, i=1,\dots, n \text{ and } \sum_{i=1}^{n} \alpha_i y_i = 0
+	\end{split}
+\end{equation}
+
+where $y \in \{-1, 1\}$ are the classification labels, $\alpha$ are the Lagrangian multipliers, $C$ is a tuning parameter chosen by cross-validation, and $K(x, x')$ represents the kernel function. The linear kernel corresponds to the dot product between $x$ and $x'$, and the radial kernel corresponds to $K(x, x') = \exp\left(  \gamma ||x-x'||^2 \right)$ where $\gamma$ is a tuning parameter that will be chosen by cross-validation. 
+
+We will fit SVM using the R package @kuhn2008building. 
 
 ### Model evaluation
 
@@ -150,7 +198,7 @@ y2 <- ifelse(dat_train$y == "yes", 1, 0)
 # library(glmnet)
 # set.seed(100)
 # cv.ridge <- cv.glmnet(x, y2, alpha = 0, family = "binomial")
-# model <- glmnet(x, y, family = "binomial", alpha = 0, lambda = cv.ridge$lambda.min)
+# model <- glmnet(x, y2, family = "binomial", alpha = 0, lambda = cv.ridge$lambda.min)
 # 
 # # get predictions for test set
 # x.test <- model.matrix(y~., dat_test)[,-1]
@@ -258,6 +306,8 @@ best.radial = cv.svm.rad$best.model
 # are we printing them out for our own understanding? 
 # or will they go in final report/pres?
 
+# (here we just want to make sure svm performs equally well on training/testing set. Only the confusion matrix on testing set needs to go in final report)
+
 # training data; svm linear
 svm.pred.lin <- predict(best.linear, dat_train %>% select(!'y'), probability=TRUE)
 confusionMatrix(svm.pred.lin, dat_train$y, positive = 'yes')$byClass
@@ -314,3 +364,5 @@ The chosen $\lambda$ for ridge logistic regression was []. For the SVM models, t
 ## Discussion
 
 The mis-classification error for the best model was [10-11] percent, only slightly better than the mis-classification error achieved for the naive model of predicting failure for all clients (12 percent). 
+
+## Bibliographies

@@ -41,7 +41,7 @@ There are four datasets available. We choose the dataset with 16 features and al
 
 [Can table1() be given a table caption + formatting]
 
-We dropped the variable `pdays` from the analysis dataset because [why?]. We also collapsed the job categories by income level and collapsed months into quarters. For job categories, "unknown" was kept as its own category, "unemployed" and "student" were considered "no income", ... [I'm not sure about these. blue-collar or self-employed is not necessarily low income, retired and student are kinda their own thing; admin, services, technician may be low income]. 
+We dropped the variable `pdays` from the analysis dataset because more than 80% of the data were missing for the variable. We also collapsed the job categories by income level and collapsed months into quarters. For job categories, "unknown" was kept as its own category, "unemployed" and "student" were considered "no income", ... [I'm not sure about these. blue-collar or self-employed is not necessarily low income, retired and student are kinda their own thing; admin, services, technician may be low income]. 
 
 Continuous variables were centered and scaled by two standard deviations to be put on approximately the same scale as categorical covariates [cite Gelman paper]. 
 
@@ -108,6 +108,7 @@ dat_test <- dat.working[-index,]
 
 
 [format visualizations and give captions, reference in text]
+(why do we only plot y vs age/balance? what about other numerical variables?)
 
 ```{r}
 ggplot(dat_full, aes(x = y, y = age)) + xlab('subscribed')+
@@ -197,7 +198,7 @@ y2 <- ifelse(dat_train$y == "yes", 1, 0)
 # library(glmnet)
 # set.seed(100)
 # cv.ridge <- cv.glmnet(x, y2, alpha = 0, family = "binomial")
-# model <- glmnet(x, y, family = "binomial", alpha = 0, lambda = cv.ridge$lambda.min)
+# model <- glmnet(x, y2, family = "binomial", alpha = 0, lambda = cv.ridge$lambda.min)
 # 
 # # get predictions for test set
 # x.test <- model.matrix(y~., dat_test)[,-1]
@@ -304,6 +305,8 @@ best.radial = cv.svm.rad$best.model
 # NOTE: what do we want to do with these? 
 # are we printing them out for our own understanding? 
 # or will they go in final report/pres?
+
+# (here we just want to make sure svm performs equally well on training/testing set. Only the confusion matrix on testing set needs to go in final report)
 
 # training data; svm linear
 svm.pred.lin <- predict(best.linear, dat_train %>% select(!'y'), probability=TRUE)

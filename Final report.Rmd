@@ -4,6 +4,7 @@ author: "Group 6"
 date: "4/15/2022"
 output: html_document
 bibliography: references.bib  
+csl: biomed-central.csl
 ---
 
 ```{r setup, include=FALSE}

@@ -227,17 +227,17 @@ best.linear = cv.svm.lin$best.model
 
 # Radial SVM: tune cost parameter
 set.seed(100)
-start = Sys.time()
-cv.svm.rad = tune.svm(y~., data=dat_train, kernel ="radial", type='C-classification',
-                      cost=c(0.001, 0.01, 0.1, 1),
-                      gamma=2^seq(-5,2,by=2),
-                      tunecontrol = tune.control(sampling = "cross", cross = 5),
-                      probability=TRUE)
-Sys.time() - start #  min
+# start = Sys.time()
+# cv.svm.rad = tune.svm(y~., data=dat_train, kernel ="radial", type='C-classification',
+#                       cost=c(0.001, 0.01, 0.1, 1),
+#                       gamma=2^seq(-5,2,by=2),
+#                       tunecontrol = tune.control(sampling = "cross", cross = 5),
+#                       probability=TRUE)
+# Sys.time() - start # 20 min
 
 # save/load for computational ease
-saveRDS(cv.svm.rad, file = "radial_svm.RDS")
-# cv.svm.rad = readRDS('radial_svm.RDS')
+# saveRDS(cv.svm.rad, file = "radial_svm.RDS")
+cv.svm.rad = readRDS('radial_svm.RDS')
 
 # pick best svm radial
 best.radial = cv.svm.rad$best.model

@@ -352,9 +352,18 @@ The chosen $\lambda$ for ridge logistic regression was []. For the SVM models, t
 
 [report metrics, describe figures/tables]
 
+### Variables of interest
+Table ? shows the regularized coefficient of each predictor from ridge logistic regression model. According to the ridge logistic regression, we found several variables contributing the success of telemarketing. The strongest predictor is the outcome of previous telemarketing campaign ($\hat{\beta}=2.15$), which means a client is much more likely to make a deposit if the client made a deposit in the previous telemarketing campaign. This finding suggests that targeting existing client is the most efficient way of telemarketing in our analysis. The second most predictive variable is job type. In our analysis, we found clients that are entrepreneur are the least likely to make a deposit ($\hat{\beta}=-1.39$), followed by self-employed ($\hat{\beta}=-0.51$) and blue collar ($\hat{\beta}=-0.47$). On the contrary, retired client is more likely to make a deposit ($\hat{\beta}=0.31$). Interestingly, married person, home owner and person with loan  are less likely to contribute a deposit ($\hat{\beta}=-0.65$), ($\hat{\beta}=-0.74$) and ($\hat{\beta}=-0.52$) respectively, which indicate they are probably the same group of people.
+
+add ridge logistic regression output table here
+
+
+
 
 ## Discussion
 
 The mis-classification error for the best model was [10-11] percent, only slightly better than the mis-classification error achieved for the naive model of predicting failure for all clients (12 percent). 
+
+The ridge logistic regression is able to quantitatively assess the effect of each predictor so that it can give suggestion to the stake holder on how the next telemarketing can be implemented so that the return can be maximized. First of all, the previous successful targets need to be targeted again in the new campaign. Secondly, telemarketing should focus more on retirees rather than the people in early career or those with low-income. In addition, telemarketing will be more likely to succeed when targeting unmarried, non-homeowner and loan-free persons.
 
 ## Bibliographies

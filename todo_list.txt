@@ -1,0 +1,9 @@
+Code:
+1. change svm to weightsvm [Michael]
+2. cutoff for logistic regression [Camille]
+
+Writing:
+1. confusion matrices + description of them [Camille]
+2. address minor comments in report, update data pre-processing section [Shuang]
+
+Merge different versions of report 

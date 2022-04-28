@@ -5,6 +5,7 @@ date: "4/15/2022"
 output: html_document
 bibliography: references.bib  
 csl: biomed-central.csl
+urlcolor: blue
 ---
 
 ```{r setup, include=FALSE}
@@ -261,7 +262,7 @@ w = ifelse(y2==1, 1-w, w)
 set.seed(100)
 
 # best.linear = best.tune_wsvm(train.x=x, train.y=dat_train$y, weight=w, ranges=list(cost=c(0.001, 0.01, 0.1, 1, 5)),
-#                              tunecontrol=tune.control(sampling='cross', cross=3), 
+#                              tunecontrol=tune.control(sampling='cross', cross=5),
 #                              kernel='linear', scale=FALSE)
 
 # save/load for computational ease
@@ -271,26 +272,17 @@ best.linear = readRDS('cv_sim_lin.rds')
 
 # Radial SVM: tune cost parameter
 set.seed(100)
-# start = Sys.time()
-# cv.svm.rad = tune.svm(y~., data=dat_train, kernel ="radial", type='C-classification',
-#                       cost=c(0.001, 0.01, 0.1, 1),
-#                       gamma=2^seq(-5,2,by=2),
-#                       tunecontrol = tune.control(sampling = "cross", cross = 5),
-#                       probability=TRUE)
-# Sys.time() - start # 20 min
 
-best.radial = best.tune_wsvm(train.x=x, train.y=dat_train$y, weight=w, 
-                             ranges=list(cost=c(0.001, 0.01, 0.1, 1),
-                                         gamma=2^seq(-5,2,by=2)),
-                             tunecontrol=tune.control(sampling='cross', cross=3),
-                             kernel='linear', scale=FALSE)
+# best.radial = best.tune_wsvm(train.x=x, train.y=dat_train$y, weight=w, 
+#                              ranges=list(cost=c(0.001, 0.01, 0.1, 1),
+#                                          gamma=2^seq(-5,2,by=2)),
+#                              tunecontrol=tune.control(sampling='cross', cross=5),
+#                              kernel='radial', scale=FALSE)
 
 # save/load for computational ease
-saveRDS(best.radial, file = "radial_svm.RDS")
-# best.radial = readRDS('radial_svm.RDS')
+# saveRDS(best.radial, file = "radial_svm.RDS")
+best.radial = readRDS('radial_svm.RDS')
 
-# pick best svm radial
-best.radial = cv.svm.rad$best.model
 ```
 
 ```{r, echo=TRUE}
@@ -302,47 +294,30 @@ best.radial = cv.svm.rad$best.model
 # (here we just want to make sure svm performs equally well on training/testing set. Only the confusion matrix on testing set needs to go in final report)
 
 # training data; svm linear
-svm.pred.lin <- predict(best.linear, dat_train %>% select(!'y'), probability=TRUE)
+svm.pred.lin <- predict(best.linear)
 confusionMatrix(svm.pred.lin, dat_train$y, positive = 'yes')$byClass
 
 # test data; svm linear
-svm.pred.lin.test <- predict(best.linear, dat_test %>% select(!'y'), probability=TRUE)
+svm.pred.lin.test <- predict(best.linear, x.test)
 confusionMatrix(svm.pred.lin.test, dat_test$y, positive = 'yes')$byClass
 
 # training data; svm radial
-svm.pred.radial <- predict(best.radial, dat_train %>% select(!'y'), probability=TRUE)
+svm.pred.radial <- predict(best.radial, x)
 confusionMatrix(svm.pred.radial, dat_train$y, positive = 'yes')$byClass
 
 # test data; svm radial
-svm.pred.rad.test <- predict(best.radial, dat_test %>% select(!'y'), probability=TRUE)
+svm.pred.rad.test <- predict(best.radial, x.test)
 confusionMatrix(svm.pred.rad.test, dat_test$y, positive = 'yes')$byClass
 ```
 
 
-```{r}
-
-# ROC curve using ROCR package
-pr.svm.lin.test <- prediction(attr(svm.pred.lin.test, "probabilities")[,2], dat_test$y)
-prf.svm.lin.test <- performance(pr.svm.lin.test, measure="tpr", x.measure="fpr")
-
-pr.svm.radial.test <- prediction(attr(svm.pred.rad.test, "probabilities")[,2], dat_test$y)
-prf.svm.radial.test <- performance(pr.svm.radial.test, measure="tpr", x.measure="fpr")
-
-# auc
-svm.lin.auc = performance(pr.svm.lin.test, measure = 'auc')@y.values
-svm.rad.auc = performance(pr.svm.radial.test, measure = 'auc')@y.values
-
-```
-
 
 ```{r}
 plot(prf.ridge.test, col = "red", print.auc=TRUE, print.auc.x = 0.5, print.auc.y = 0.3)
-plot(prf.svm.lin.test, add = TRUE, col = "lightsteelblue", print.auc=TRUE, print.auc.x = 0.5, print.auc.y = 0.3)
-plot(prf.svm.radial.test, add = TRUE, col = "orange", print.auc=TRUE, print.auc.x = 0.5, print.auc.y = 0.3)
 lines(x = c(0,1), y = c(0,1),col="black")
 legend("bottom",
-       legend=c("ridge", "linear svm", "radial svm"),
-       col=c("red", "lightsteelblue", "orange"),
+       legend=c("ridge"),
+       col=c("red"),
        lwd=4, cex =0.8, xpd = TRUE, horiz = TRUE)
 ```
 

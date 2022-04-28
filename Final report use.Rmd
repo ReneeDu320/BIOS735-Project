@@ -11,7 +11,7 @@ csl: biomed-central.csl
 knitr::opts_chunk$set(echo = FALSE)
 
 # load packages
-pkgs <- list('tidyverse', 'table1', 'e1071', 'caret', 'ROCR', 'devtools', 'OptimalCutpoints', 'car')
+pkgs <- list('tidyverse', 'table1', 'e1071', 'caret', 'ROCR', 'devtools', 'OptimalCutpoints', 'car', 'WeightSVM')
 lapply(pkgs, require, character.only = T)
 load_all('./final')
 
@@ -66,10 +66,6 @@ dat_full$month<-recode(dat_full$month,"q1='1_2_3'; q2='4_5_6';
 # drop pdays and duration
 dat = dat_full %>% select(-pdays, -duration)
 
-# NOTE: add this to R package
-scale2sd <- function(x) {
-  (x - mean(x) )/ (2*sd(x))
-}
 
 # analysis dataset
 set.seed(100)
@@ -257,21 +253,20 @@ confusionMatrix(factor(predicted.classes, levels = c('no', 'yes')), dat_test$y, 
 
 
 ```{r}
+# weights for svm
+w = rep(mean(y2), nrow(dat_train))
+w = ifelse(y2==1, 1-w, w)
+
 # Linear SVM: tune cost parameter 
 set.seed(100)
-# start = Sys.time()
-# cv.svm.lin = tune.svm(y~., data=dat_train, kernel ="linear", type='C-classification',
-#                       cost=c(0.001, 0.01, 0.1, 1, 5),
-#                       tunecontrol = tune.control(sampling = "cross", cross = 5),
-#                       probability=TRUE)
-# Sys.time() - start # 4 min
+
+# best.linear = best.tune_wsvm(train.x=x, train.y=dat_train$y, weight=w, ranges=list(cost=c(0.001, 0.01, 0.1, 1, 5)),
+#                              tunecontrol=tune.control(sampling='cross', cross=3), 
+#                              kernel='linear', scale=FALSE)
 
 # save/load for computational ease
-# saveRDS(cv.svm.lin, 'cv_sim_lin.rds')
-cv.svm.lin = readRDS('cv_sim_lin.rds')
-
-# pick best svm linear
-best.linear = cv.svm.lin$best.model
+# saveRDS(best.linear, 'cv_sim_lin.rds')
+best.linear = readRDS('cv_sim_lin.rds')
 
 
 # Radial SVM: tune cost parameter
@@ -284,9 +279,15 @@ set.seed(100)
 #                       probability=TRUE)
 # Sys.time() - start # 20 min
 
+best.radial = best.tune_wsvm(train.x=x, train.y=dat_train$y, weight=w, 
+                             ranges=list(cost=c(0.001, 0.01, 0.1, 1),
+                                         gamma=2^seq(-5,2,by=2)),
+                             tunecontrol=tune.control(sampling='cross', cross=3),
+                             kernel='linear', scale=FALSE)
+
 # save/load for computational ease
-# saveRDS(cv.svm.rad, file = "radial_svm.RDS")
-cv.svm.rad = readRDS('radial_svm.RDS')
+saveRDS(best.radial, file = "radial_svm.RDS")
+# best.radial = readRDS('radial_svm.RDS')
 
 # pick best svm radial
 best.radial = cv.svm.rad$best.model

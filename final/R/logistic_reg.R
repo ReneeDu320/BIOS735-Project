@@ -19,6 +19,19 @@ logLik <- function(eta, y){
   return(logL)
 }
 
+
+#' scale data vector
+#' 
+#' This function scale vector by meand and sd to normalized data with mean=0 and sd=1
+#' 
+#' @param x a data vector
+#' 
+#' @return scaled data vector
+scale2sd <- function(x) {
+  (x - mean(x) )/ (2*sd(x))
+}
+
+
 #' ridge logistic regression using design matrix and Y
 #' 
 #' this function fit the ridge logistic regression using design matrix X and response variable Y

@@ -1,11 +1,12 @@
 #' log likelihood function for logistic regression
 #' 
-#' FILL ME IN
+#' This function calculates the log likelihood of logistic regression
+#' based on given vector of eta and outcome
 #' 
-#' @param eta FILL ME IN
-#' @param y FILL ME IN
+#' @param eta an n by 1 vector containing the linear combination of predictors and coefficient
+#' @param y an n by 1 vector containing the outcome variable
 #' 
-#' @return FILL ME IN
+#' @return the log likelihood of logistic regression
 logLik <- function(eta, y){
   logL = sum(
     dbinom(
@@ -20,11 +21,14 @@ logLik <- function(eta, y){
 
 #' ridge logistic regression using design matrix and Y
 #' 
-#' FILL ME IN
+#' this function fit the ridge logistic regression using design matrix X and response variable Y
+#' this model use iteratively reweighted least square algorithm to estimate coefficient of X
 #' 
-#' @param X FILL ME IN
+#' @param X an n by p matrix containing the design matrix X, the predictors
+#' @param y an n by 1 vector containing the outcome variable
+#' @param lambda a scalar value as penalty for ridge logistic regression 
 #' 
-#' @return FILL ME IN
+#' @return the IRLS estimate of regression coefficients
 #' 
 #' @export
 glm.logit.ridge <- function(X, y, lambda=1, tol = 1e-7, maxit = 50,trace=FALSE) {
@@ -94,11 +98,15 @@ glm.logit.ridge <- function(X, y, lambda=1, tol = 1e-7, maxit = 50,trace=FALSE) 
 
 #' Cross validation for ridge logistic regression using design matrix and Y
 #' 
-#' FILL ME IN
+#' this function use cross validation to identify the best lambda for ridge logistic regression
 #' 
-#' @param X FILL ME IN
+#' @param X an n by p matrix containing the design matrix X, the predictors
+#' @param y an n by 1 vector containing the outcome variable
+#' @param lambdas an vector of lambda for the grid search of best lambda
+#' @param fold a integer as the number of fold in the cross validation
 #' 
-#' @return FILL ME IN
+#' 
+#' @return the best lambda for ridge logistic regression after grid search
 #' 
 #' @export
 cv.glm.logit.ridge <- function(X, y, lambdas, fold=10) {
@@ -143,11 +151,15 @@ cv.glm.logit.ridge <- function(X, y, lambdas, fold=10) {
 }
 
 
-#' FILL ME IN
+#' Predict outcome using fitted model of ridge logistic regression
 #' 
-#' @param fit FILL ME IN
+#' This function use previously fitted ridge logistic model to predict new outcome using new design matrix 
 #' 
-#' @return FILL ME IN
+#' @param fit previously fitted object using ridge logistic regression
+#' @param X an n by p matrix as new design matrix used to predict new outcome
+#' @param prob_cut and scalar value between 0 and 1, the probability cutoff to set the cutoff setting outcome as 0 or 1
+#' 
+#' @return a list object containing the predicted outcome and their correspoding probability
 #' 
 #' @export
 predict.logistic <- function(fit, X, prob_cut = 0.5){
@@ -158,17 +170,3 @@ predict.logistic <- function(fit, X, prob_cut = 0.5){
 }
 
 
-
-#' FILL ME IN
-#' 
-#' @param fit FILL ME IN
-#' 
-#' @return FILL ME IN
-#' 
-#' @export
-predict.logistic <- function(fit, X, prob_cut = 0.5){
-  eta = X %*% fit$coefficients
-  y.prob = exp(eta)/(1 + exp(eta))
-  y = ifelse(y.prob > prob_cut, 1, 0)
-  return(list(y=y,prob=y.prob))
-}

@@ -1,41 +1,48 @@
 ---
 title: "BIOS735 Group 6 Final project"
 author: "Group 6"
-date: "4/15/2022"
+date: "4/30/2022"
 output: html_document
 bibliography: references.bib  
 csl: biomed-central.csl
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, message=FALSE)
 
 # load packages
-pkgs <- list('tidyverse', 'table1', 'e1071', 'caret', 'ROCR', 'devtools', 'OptimalCutpoints', 'car', 'WeightSVM')
+pkgs <- list('tidyverse', 'table1', 'e1071', 'caret', 'ROCR', 
+             'devtools', 'OptimalCutpoints', 'car', 'WeightSVM', 
+             'knitr', 'kableExtra')
 lapply(pkgs, require, character.only = T)
 load_all('./final')
 
 # set ggplot theme
 theme_set(theme_bw())
 
+# run_from_scratch = FALSE uses saved model objects
+# set to TRUE if want to run from scratch
+run_from_scratch = FALSE
+
+# sensitivity analysis
+# if set to true, will have to run from scratch
+do_standardize = FALSE
+if (do_standardize) (run_from_scratch = TRUE)
+
 # read data
-dat_full <- read_delim("bank-full.csv",
-           delim=';')
+dat_full <- read_delim("bank-full.csv", delim=';')
 ```
 
 ## Introduction
 
-The topic of our project is to improve the performance in telemarketing using predictive models. Telemarketing is a method of marketing directly to customers via phone or the Internet in order to sell goods or services. Telemarketing Industry has a market size of $23.4 bn in 2022 and is still expecting a 2% growth in market size.[ref](https://www.ibisworld.com/industry-statistics/market-size/telemarketing-call-centers-united-states/) A central challenge in telemarketing is in targeting individuals to sell goods or services. It would be costly to indiscriminately canvas everyone, but it would also be undesirable to target a random subset of the population as many potential sales could be lost. Thus, there is great interest in tools to identify the groups of individuals for whom telemarketing would likely result in sales and the groups of whom telemarketing is unlikely to be successful. Then, the firm could save resources by ignoring those in the latter group while not losing out on potential sales @marshall1988successfully. 
+The topic of our project is to improve the performance in telemarketing using predictive models. Telemarketing is a method of marketing directly to customers via phone or the Internet in order to sell goods or services. The telemarketing industry has a market size of $23.4 bn in 2022 and is still expecting a 2% growth in market [size](https://www.ibisworld.com/industry-statistics/market-size/telemarketing-call-centers-united-states/). A central challenge in telemarketing is in targeting individuals to sell goods or services. It would be costly to indiscriminately canvas everyone, but it would also be undesirable to target a random subset of the population as many potential sales could be lost. Thus, there is great interest in tools to identify the groups of individuals for whom telemarketing would likely result in sales and the groups of whom telemarketing is unlikely to be successful. Then, the firm could save resources by ignoring those in the latter group while not losing out on potential sales @marshall1988successfully. 
 
-The goal of this project is to predict the success of telemarketing using potential customers’ key metrics. We will use predictive statistical models to predict whether a client would agree to subscribe a term deposit of future telemarketing campaigns based on historical data. The expected results for this project are: 1. Construct a ridge logistic regression model from scratch and implement in an R package that can be applied in future similar problems; 2. Fit a support vector machine model using R package and compare the results with ridge logistic regression model
+In this project, we analysed a telemarketing dataset from a Portuguese retail bank [dataset](https://archive.ics.uci.edu/ml/datasets/bank+marketing) @moro2014data, which contains information on clients who were contacted by phone call to sell term deposit subscriptions (also known as certificate of deposits) and the outcome of the contact, which is a binary indicator for if the client subscribed a term deposit, which we call a "success". 
 
+The goal of this project was to build a classifier using the covariates listed in Table 1 to predict whether or not that client subscribed a term deposit. We chose F1 Score as the criterion to evaluate model performance, with accuracy, Kappa, sensitivity, and specificity as secondary metrics. We used logistic regression with a ridge penalty and support vector machines (SVM) as the candidate models. The ridge logistic regression model was implemented from scratch while pre-existing R packages were used for SVM. An R package was developed that can be used to replicate our analysis. All analysis materials are in our [Github](https://github.com/ReneeDu320/BIOS735-Project) page. 
 
-In this project, we analyse a telemarketing dataset from a Portuguese retail bank [dataset](https://archive.ics.uci.edu/ml/datasets/bank+marketing) @moro2014data, which contains information on clients who were contacted by phone call to sell term deposit subscriptions and the outcome of the contact, which is a binary indicator for if the client subscribed a term deposit. There were 45211 observations and 16 features, which are summarized in Table \ref{}. There are some missing values in the dataset (column `pdays`). We also treat the response `unknown` as one category instead of the missing values. The binary outcome variable is highly imbalanced, with 39922 failures and 5289 successes. 
-
-The goal of this project is to build a classifier using the covariates listed in Table \ref{} to predict whether or not that client subscribed a term deposit. We choose Accuracy, Kappa, Sensitivity, Specificity and F1 Score as the criterion we will use to evaluate model performance. We used logistic regression with a ridge penalty and support vector machines (SVM) as the candidate models. We also developed an R package that can be used to replicate our analysis. All analysis materials are in our Github page [Github link](https://github.com/ReneeDu320/BIOS735-Project). 
 
 ```{r DataDescription, results = "asis", echo = FALSE, message = FALSE}
-library(knitr)
 
 tex2markdown <- function(texstring) {
   writeLines(text = texstring,
@@ -48,7 +55,7 @@ tex2markdown <- function(texstring) {
 textable <- "
 \\begin{table}[ht]
 \\centering
-\\caption{Description of variables in telemarketing data set}
+\\caption{Table 1: Description of variables in telemarketing data set}
 \\begin{tabular}{| l | l |}
 \\hline
 Feature Name & Description   \\\\
@@ -78,9 +85,18 @@ outcome      & has the client subscribed a term deposit? (binary: yes, no)
 tex2markdown(textable)
 ```
 
-## Data pre-processing
+## Data description and pre-processing
 
-There are four datasets available. We choose the dataset with 16 features and all observations (called `bank-full.csv` on the source website). To ease computational burden, we randomly select 20 percent of the data for our analysis dataset(`dat.working`), which includes 9042 observations.
+There are four datasets available. We chose the dataset with 16 features and all 45,211 observations (called `bank-full.csv` on the source website). To ease computational burden, we randomly selected 20 percent of the data for our analysis dataset(`dat.working`), which includes 9,042 observations.
+
+The features are described in Table 1 and summary statistics are computed and shown in Table 2. The features include some basic demographic and financial information on clients as well as some information on previous contacts. There were some missing values in the categorical features and these observations were treated as their own category, "unknown," and are shown in Table 2. We also collapsed months into quarters. The feature `pdays` was mostly missing (80%) so it was dropped from the analysis dataset. Additionally, the feature `duration` refers to the duration of the phone call that corresponds to the outcome variable and was therefore also dropped from the analysis dataset since the goal was to predict prospectively. 
+
+Continuous variables were centered and scaled by two standard deviations to be put on approximately the same scale as categorical covariates @gelman. 
+
+The binary outcome variable is highly imbalanced, with 7983 (88%) failures and 1059 (12%) successes. 
+
+We held out 20 percent of the data as a test set for final model performance evaluation. The remaining 80 percent of the data was used as training data to select hyperparameters in the logistic regression and SVM models. 
+
 
 ```{r DataPreprocessing, warning=FALSE}
 # combine the labels
@@ -90,8 +106,8 @@ q3 <- c('jul','aug','sep')
 q4 <- c('nov','oct','dec')
 
 #collape month into quarters
-dat_full$month<-recode(dat_full$month,"q1='1_2_3'; q2='4_5_6';
-                      q3 = '7_8_9'; q4 = '10_11_12'")
+dat_full$month<-recode(dat_full$month,
+                       "q1='q1'; q2='q2'; q3 = 'q3'; q4 = 'q4'")
 
 # drop pdays and duration
 dat = dat_full %>% select(-pdays, -duration)
@@ -99,50 +115,33 @@ dat = dat_full %>% select(-pdays, -duration)
 # analysis dataset
 set.seed(100)
 dat.working <- dat %>% 
-  mutate(age = scale2sd(age),
-         campaign = scale2sd(campaign),
-         balance = scale2sd(balance),
-         previous = scale2sd(previous)) %>% # put continuous vars on same scale as indicators
   mutate_if(is.character, as.factor) %>% # convert character to factor
   slice_sample(prop = 0.2) # select subset
 ```
 
-A brief overview of some important features from the analysis dataset(`dat.working`) is as follows:
 
 ```{r table1}
-table1(~age + job + marital + education + balance|y, data = dat.working)
+table1(~.|y, data = dat.working,
+       caption = 'Table 2: Summary of features, by observed success/failure')
 ```
 
-We dropped the variable `pdays` from the analysis dataset because more than 80% of the data were missing for the variable. We also droped the variable `duration` from the analysis dataset because this variable is collected after the company's phone call to customers, so that the outcome is already known. Thus, it should not appear in the predictive model. We also collapsed months into quarters. Continuous variables were centered and scaled by two standard deviations to be put on approximately the same scale as categorical covariates [cite Gelman paper]. 
 
-We hold out 20 percent of the data as a test set for final model performance evaluation. The remaining 80 percent of the data is used as training data to select hyperparameters in the logistic regression and SVM models. 
-
-```{r SelectTrain/test}
-# select training and testing data
-set.seed(100)
-y <- dat.working$y
-index <- createDataPartition(
-  y,
-  times = 1,
-  p = 0.8,
-  list = F,
-  groups = min(5, length(y))
-)
-dat_train <- dat.working[index,]
-dat_test <- dat.working[-index,]
-
-```
-
-The following plots show some insights from the original dataset. People aged from 25-50 are more considered as potential customers since the density for this age group is especially high in the plot.
+Figures 1-4 show some insights from the data. Figure 1 shows a density plot of age by subscription status. Most individuals in the data are between 25 and 60 years old. Additionally, relatively more individuals subcribed than not at the extremes of the age distribution.  
 
 ```{r AgePlot1}
-ggplot(dat_full, aes(x = age, fill = y)) + geom_density(alpha = 0.5,position = 'stack') + theme_classic()+ labs(fill = "subscribed") + ggtitle('age density plot based on labels')
+ggplot(dat.working, aes(x = age, fill = y)) + 
+  geom_density(alpha = 0.5,position = 'stack') + 
+  theme_classic() +
+  labs(title = 'Figure 1: Age density plot by subscribed status',
+       fill = 'Subscribed',
+       x = 'Age',
+       y = 'Density')
 ```
 
-The following plot gives a distribution of mean_balance over age group. The average balance amount increased along with the increase in age. This is common that aged people typically have a higher balance compared to the young people.
+Figure 2 shows the distribution of mean yearly balance over age group. Older age groups had a larger yearly balance, on average, compared to younger age groups, with the exception of the oldest age group. 
 
 ```{r AgePlot2, include=FALSE}
-data_new = dat_full%>%
+data_new = dat.working %>%
   select(age, balance)%>%
   mutate(age_group =  case_when(age < 20 ~ "<20",
                                 
@@ -162,30 +161,86 @@ data_new = dat_full%>%
 ```{r AgePlot3}
 ggplot(data_new, aes( y=mean_balance, x=age_group)) + 
     geom_bar(position="dodge", stat="identity",fill = 'plum3') +
-  ggtitle('mean_balance by age group') + theme_minimal()
+  labs(title = 'Figure 2: Mean yearly balance, averaged by age group',
+       x = 'Age group',
+       y = 'Mean yearly balance') + 
+  theme_minimal()
 
 ```
 
-Grouping the job categories into `high_income`(including 'admin.','entrepreneur','management','services','technician'), `low_income`(including 'blue-collar','housemaid','retired','self-employed'), `no_income`(including 'unemployed','student') and `unkown`('unkown'), the number of total compaigns sent to each group has been plotted as below:
-Companies are spending more efforts in engaging high-income group and low-income group, while these two groups have similar subscription rates.
+
+Figure 3 shows the total number of campaigns by job type for subscribers and non-subscribers. It shows the amount of effort the bank pursued each occupation group. However, this plot may just reflect the number of each job type in the population and sample. Figure 4 shows the average number of campaigns, and we observe that the bank pursued each group by proportionally similar amounts. 
+
 
 ```{r CampaignPlot}
-unknown <- c('unknown')
-no_income <- c('unemployed','student')
-low_income <- c('blue-collar','housemaid','retired','self-employed')
-high_income <- c('admin.','entrepreneur','management','services','technician')
-dat_plot <- dat_full
-dat_plot$job<-recode(dat_plot$job,"unknown='unknown'; no_income='no_income';
-                      low_income = 'low_income'; high_income = 'high_income'")
+# unknown <- c('unknown')
+# no_income <- c('unemployed','student')
+# low_income <- c('blue-collar','housemaid','retired','self-employed')
+# high_income <- c('admin.','entrepreneur','management','services','technician')
+# dat_plot <- dat_full
+# dat_plot$job<-recode(dat_plot$job,"unknown='unknown'; no_income='no_income';
+#                       low_income = 'low_income'; high_income = 'high_income'")
 
-ggplot(dat_plot, aes(fill=y, y= campaign, x=job)) + 
-    geom_bar(position="stack", stat="identity") + theme_classic()+ labs(fill = "subscribed") + ggtitle('Number of total campaigns sent for each job_type')+scale_fill_manual(values = c("burlywood1","darkolivegreen3"))
+dat_plot = dat.working %>%
+  group_by(job, y) %>%
+  summarize(avg_campaign = mean(campaign),
+            tot_campaign = sum(campaign)) %>%
+  ungroup()
+
+ggplot(dat_plot, aes(fill=y, y=tot_campaign, x=reorder(job, tot_campaign, function(x) x[2]))) + 
+  geom_bar(position='dodge', stat='identity', width=0.8) + 
+  theme_classic() + 
+  labs(fill = "Subscribed",
+       title = 'Figure 3: Total number of campaigns sent for each job type',
+       y = 'Total campaigns',
+       x = 'Job type') + 
+  coord_flip() +
+  scale_fill_manual(values = c("burlywood1","darkolivegreen3"))
+
+ggplot(dat_plot, aes(fill=y, y=avg_campaign, x=reorder(job, avg_campaign, function(x) x[2]))) + 
+  geom_bar(position='dodge', stat='identity', width=0.8) + 
+  theme_classic() + 
+  labs(fill = "Subscribed",
+       title = 'Figure 4: Average number of campaigns sent for each job type',
+       y = 'Average campaigns',
+       x = 'Job type') + 
+  coord_flip() +
+  scale_fill_manual(values = c("burlywood1","darkolivegreen3"))
+```
+
+
+
+```{r SelectTrain/test}
+
+# put continuous vars on same scale as indicators
+# put here b/c want summary table/figures to show on raw scale
+if (!do_standardize) {
+  dat.working = dat.working %>%
+    mutate(age = scale2sd(age),
+           campaign = scale2sd(campaign),
+           balance = scale2sd(balance),
+           previous = scale2sd(previous))
+}
+
+# select training and testing data
+set.seed(100)
+y <- dat.working$y
+index <- createDataPartition(
+  y,
+  times = 1,
+  p = 0.8,
+  list = F,
+  groups = min(5, length(y))
+)
+dat_train <- dat.working[index,]
+dat_test <- dat.working[-index,]
+
 ```
 
 
 ## Methods
 
-We choose logistic regression as our likelihood-based model since it allows for classification. We consider a ridge penalty here since penalization often improves prediction, which is the primary goal. A ridge penalty is chosen as opposed to a lasso penalty since the number of features is relatively few compared to the number of observations so feature selection may be unnecessary. 
+We chose logistic regression as our likelihood-based model since it allows for classification. We consider a ridge penalty here since penalization often improves prediction, which is the primary goal. A ridge penalty is chosen as opposed to a lasso penalty since the number of features is relatively few compared to the number of observations so feature selection may be unnecessary. 
 
 Support vector machines were chosen for their flexibility and good out-of-box performance for classification. By fitting SVM using both linear and RBF kernels, we allow for flexibility in the relationship between the outcome and features. 
 
@@ -258,35 +313,46 @@ For SVM, we used both a linear kernel and a radial basis function (RBF) kernel. 
 # fitting ridge logistic regression
 # get data into format for logistic regression
 x <- model.matrix(y~., dat_train)[,-1]
+x.test <- model.matrix(y~., dat_test)[,-1]
 y2 <- ifelse(dat_train$y == "yes", 1, 0)
-# # fit ridge logistc reg using glmnet
-# library(glmnet)
-# set.seed(100)
-# cv.ridge <- cv.glmnet(x, y2, alpha = 0, family = "binomial")
-# model <- glmnet(x, y2, family = "binomial", alpha = 0, lambda = cv.ridge$lambda.min)
-# 
-# # get predictions for test set
-# x.test <- model.matrix(y~., dat_test)[,-1]
-# probabilities.glmnet <- model %>% predict(newx = x.test, type='response')
-# our ridge LR code
-set.seed(100)
-t0 = Sys.time()
+
+if (do_standardize) {
+  x.old = x
+  x.old[,'age'] = scale2sd(x.old[,'age'])
+  x.old[,'campaign'] = scale2sd(x.old[,'campaign'])
+  x.old[,'balance'] = scale2sd(x.old[,'balance'])
+  x.old[,'previous'] = scale2sd(x.old[,'previous'])
+  x = scale(x)
+  x.test = scale(x.test)
+}
+
 # penalty parameters to test (on log-scale)
 # NOTE: should change function argument to make clear it is on log-scale e.g. name it loglambda
 lambdas = seq(-5,1,length.out=10)
+
 # fit models using cv (read from file to save computation time)
-# cv.ridgeLR <- cv.glm.logit.ridge(x, y2, lambdas, fold=5)
-cv.ridgeLR = readRDS('cv_ridge.rds')
-# saveRDS(cv.ridgeLR, 'cv_ridge.rds')  # save cv object (o/w takes 13 mins to run)
-# print(Sys.time() - t0)
+# if (run_from_scratch) {
+#   # set seed
+#   set.seed(100)
+#   
+#   # takes about 13 mins
+#   cv.ridgeLR <- cv.glm.logit.ridge(x, y2, lambdas, fold=5)
+#   saveRDS(cv.ridgeLR, 'cv_ridge.rds')
+# } else {
+  cv.ridgeLR = readRDS('cv_ridge.rds')
+# }
+
 # best ridge logistic reg model
 model.ridge <- glm.logit.ridge(x, y2, lambda = cv.ridgeLR$lambda.min)
+probs.ridge.train <- predict.logistic(model.ridge, x)$prob
+
 # get probability predictions on test set
-x.test <- model.matrix(y~., dat_test)[,-1]
 probs.ridge.test <- predict.logistic(model.ridge, x.test)$prob
+
 # ROC curve using ROCR package
 pr.ridge.test <- prediction(probs.ridge.test, dat_test$y)
 prf.ridge.test <- performance(pr.ridge.test, measure="tpr", x.measure="fpr")
+
 # auc
 ridge.auc = performance(pr.ridge.test, measure = 'auc')@y.values[[1]]
 ```
@@ -295,6 +361,7 @@ ridge.auc = performance(pr.ridge.test, measure = 'auc')@y.values[[1]]
 ```{r RidgePerformance}
 # Model performance - select logistic cutoff using training data
 pr.ridge.train <- prediction(predict.logistic(model.ridge, x)$prob, dat_train$y)
+
 # get sensitivity
 sens <- data.frame(x=unlist(performance(pr.ridge.train, "sens")@x.values), 
                    y=unlist(performance(pr.ridge.train, "sens")@y.values))
@@ -307,6 +374,7 @@ spec <- data.frame(x=unlist(performance(pr.ridge.train, "spec")@x.values),
 prec <- data.frame(x=unlist(performance(pr.ridge.train, "prec")@x.values), 
                    y=unlist(performance(pr.ridge.train, "prec")@y.values))
 prec <- prec[-1,]
+
 # get recall
 rec <- data.frame(x=unlist(performance(pr.ridge.train, "rec")@x.values), 
                    y=unlist(performance(pr.ridge.train, "rec")@y.values))
@@ -319,24 +387,44 @@ cutoff <- prec$x[which(1/(rec$y)+1/(prec$y)==min(1/(rec$y)+1/(prec$y)))]
 # weights for svm
 w = rep(mean(y2), nrow(dat_train))
 w = ifelse(y2==1, 1-w, w)
-# Linear SVM: tune cost parameter 
+
+# Linear SVM
+if (run_from_scratch) {
+  
+  # set seed
+  set.seed(100)
+  
+  # do CV and select best model
+  best.linear = best.tune_wsvm(train.x=x, train.y=dat_train$y, weight=w, ranges=list(cost=c(0.001, 0.01, 0.1, 1, 5)),
+                             tunecontrol=tune.control(sampling='cross', cross=5),
+                             kernel='linear', scale=FALSE)
+  
+  # save
+  saveRDS(best.linear, 'cv_sim_lin.rds')
+} else {
+  best.linear = readRDS('cv_sim_lin.rds')
+}
+
+# Radial SVM
 set.seed(100)
-# best.linear = best.tune_wsvm(train.x=x, train.y=dat_train$y, weight=w, ranges=list(cost=c(0.001, 0.01, 0.1, 1, 5)),
-#                              tunecontrol=tune.control(sampling='cross', cross=5),
-#                              kernel='linear', scale=FALSE)
-# save/load for computational ease
-# saveRDS(best.linear, 'cv_sim_lin.rds')
-best.linear = readRDS('cv_sim_lin.rds')
-# Radial SVM: tune cost parameter
-set.seed(100)
-# best.radial = best.tune_wsvm(train.x=x, train.y=dat_train$y, weight=w, 
-#                              ranges=list(cost=c(0.001, 0.01, 0.1, 1),
-#                                          gamma=2^seq(-5,2,by=2)),
-#                              tunecontrol=tune.control(sampling='cross', cross=5),
-#                              kernel='radial', scale=FALSE)
-# save/load for computational ease
-# saveRDS(best.radial, file = "radial_svm.RDS")
-best.radial = readRDS('radial_svm.RDS')
+
+if (run_from_scratch) {
+  
+  # set seed
+  set.seed(100)
+  
+  # do CV and select best model
+  best.radial = best.tune_wsvm(train.x=x, train.y=dat_train$y, weight=w,
+                             ranges=list(cost=c(0.001, 0.01, 0.1, 1),
+                                         gamma=2^seq(-5,2,by=2)),
+                             tunecontrol=tune.control(sampling='cross', cross=5),
+                             kernel='radial', scale=FALSE)
+  
+  # save
+  saveRDS(best.radial, file = "radial_svm.RDS")
+} else {
+  best.radial = readRDS('radial_svm.RDS')
+}
 ```
 
 
@@ -351,44 +439,64 @@ sens %>% ggplot(aes(x,y)) +
   geom_line() + 
   geom_line(data=spec, aes(x,y,col="red")) +
   scale_y_continuous(sec.axis = sec_axis(~., name = "Specificity")) +
-  labs(x='Cutoff', y="Sensitivity") +
+  labs(x='Cutoff', y="Sensitivity",
+       title='Figure 5: Sensitivity and specificity for varying cutoffs \nof ridge logistic regression model') +
   theme(axis.title.y.right = element_text(colour = "red"), legend.position="none")
 ```
 
 Using the optimal cutoff, the confusion matrix for prediction on testing dataset, the F1 score, and the ROC curve are shown below. 
 
 ```{r ResultRidge2}
-predicted.classes <- ifelse(probs.ridge.test > cutoff, "yes", "no")
-confusionMatrix(factor(predicted.classes, levels = c('no', 'yes')), dat_test$y, positive = 'yes')
-(confusionMatrix(factor(predicted.classes, levels = c('no', 'yes')), dat_test$y, positive = 'yes')$byClass)['F1']
-
-plot(prf.ridge.test, col = "red")
+plot(prf.ridge.test, col = "red", main='Figure 6: ROC plot for ridge logistic regression model')
 lines(x = c(0,1), y = c(0,1),col="black")
 text(0.5, 0.3, paste0("AUC = ",round(ridge.auc, 2)),
      cex=0.65, pos=3,col="red") 
-legend("bottom",
-       legend=c("ridge logistic regression"),
-       col=c("red"),
-       lwd=4, cex =0.8, xpd = TRUE, horiz = TRUE)
 ```
 
 For SVM with linear kernel, the confusion matrix for prediction on testing dataset and the F1 score are shown below.
 
-```{r ResultSVM1}
-# test data; svm linear
-svm.pred.lin.test <- predict(best.linear, x.test)
-confusionMatrix(svm.pred.lin.test, dat_test$y, positive = 'yes')
-(confusionMatrix(svm.pred.lin.test, dat_test$y, positive = 'yes')
-$byClass)['F1']
-```
 
 For SVM with radial kernel, the confusion matrix for prediction on testing dataset and the F1 score are shown below.
 
-```{r ResultSVM2}
+```{r ResultAll}
+
+# train data; ridge
+ridge.pred.train <- ifelse(probs.ridge.train > cutoff, "yes", "no")
+ridge.train.res = confusionMatrix(factor(ridge.pred.train, levels = c('no', 'yes')), dat_train$y, positive = 'yes')$byClass
+
+# train data; svm linear
+svm.pred.lin.train <- predict(best.linear)
+svm.lin.train.res = confusionMatrix(svm.pred.lin.train, dat_train$y, positive = 'yes')$byClass
+
+# train data; svm radial
+svm.pred.rad.train <- predict(best.radial)
+svm.rad.train.res = confusionMatrix(svm.pred.rad.train, dat_train$y, positive = 'yes')$byClass
+
+# test data; ridge
+ridge.pred.test <- ifelse(probs.ridge.test > cutoff, "yes", "no")
+ridge.test.res = confusionMatrix(factor(ridge.pred.test, levels = c('no', 'yes')), dat_test$y, positive = 'yes')$byClass
+
+# test data; svm linear
+svm.pred.lin.test <- predict(best.linear, x.test)
+svm.lin.test.res = confusionMatrix(svm.pred.lin.test, dat_test$y, positive = 'yes')$byClass
+
 # test data; svm radial
 svm.pred.rad.test <- predict(best.radial, x.test)
-confusionMatrix(svm.pred.rad.test, dat_test$y, positive = 'yes')
-(confusionMatrix(svm.pred.rad.test, dat_test$y, positive = 'yes')$byClass)['F1']
+svm.rad.test.res = confusionMatrix(svm.pred.rad.test, dat_test$y, positive = 'yes')$byClass
+
+
+# put it all into a dataframe
+pred_metrics = tibble(Metric = names(ridge.train.res),
+                      `Ridge logistic, train` = ridge.train.res,
+                      `SVM linear kernel, train` = svm.lin.train.res,
+                      `SVM radial kernel, train` = svm.rad.train.res,
+                      `Ridge logistic, test` = ridge.test.res,
+                      `SVM linear kernel, test` = svm.lin.test.res,
+                      `SVM radial kernel, test` = svm.rad.test.res)
+
+# display results
+kable(pred_metrics, caption='Table 3', 
+      digits=3, format='html', row.names=FALSE)
 ```
 
 The chosen $\lambda$ for ridge logistic regression was 0.013. For the SVM models, the chosen cost hyperparameter for the linear kernel was 0.1, and for the RBF kernel, the chosen cost and $\gamma$ were 1 and 0.125, respectively. The numbers of support vectors are 5370 and 5490, respectively, for linear and kernel SVM.
@@ -398,10 +506,34 @@ Form the three confusion matrices above, we can see that the F1 score for ridge 
 ### Variables of interest
 Table 2 shows the regularized coefficient of each predictor from ridge logistic regression model. According to the ridge logistic regression, we found several variables contributing the success of telemarketing. The strongest predictor is the outcome of previous telemarketing campaign ($\hat{\beta}=2.15$), which means a client is much more likely to make a deposit if the client made a deposit in the previous telemarketing campaign. This finding suggests that targeting existing client is the most efficient way of telemarketing in our analysis. The second most predictive variable is job type. In our analysis, we found clients that are entrepreneur are the least likely to make a deposit ($\hat{\beta}=-1.39$), followed by self-employed ($\hat{\beta}=-0.51$) and blue collar ($\hat{\beta}=-0.47$). On the contrary, retired client is more likely to make a deposit ($\hat{\beta}=0.31$). Interestingly, married person, home owner and person with loan  are less likely to contribute a deposit ($\hat{\beta}=-0.65$), ($\hat{\beta}=-0.74$) and ($\hat{\beta}=-0.52$) respectively, which indicate they are probably the same group of people.
 
-```{r regressionCoefficient, echo=FALSE, fig.cap="Table 2: Regularized coefficients", out.width = '45%'}
-knitr::include_graphics("ridge coefficients.png")
-```
 
+```{r regressionCoefficient2}
+
+# create coefficient table
+coef_table = tibble(Group = c('age', 'job',
+                              rep('', 10),
+                              'marital', '', 'education',
+                              rep('', 2), 'default', 
+                              'balance', 'housing', 'loan',
+                              'contact', '', 'day', 'month',
+                              '', '', 'campaign', 'previous',
+                              'poutcome', '', ''),
+                    Covariate = row.names(model.ridge$coefficients),
+                    Estimate = model.ridge$coefficients[,1])
+
+# clean up covariate column
+coef_table$Covariate = gsub('job|marital|education|contact|month|poutcome', '', coef_table$Covariate)
+coef_table = coef_table %>%
+  mutate(Covariate = case_when(Covariate=='10_11_12' ~ 'q4',
+                               Covariate=='7_8_9' ~ 'q3',
+                               Covariate=='4_5_6' ~ 'q2',
+                               TRUE ~ Covariate))
+
+# display results
+kable(coef_table, caption='Table 4: Coefficients of ridge logistic regression model', 
+      digits=2, format='html', row.names=FALSE)
+
+```
 
 ## Discussion
 
@@ -409,4 +541,5 @@ The mis-classification error for the best model was [10-11] percent, only slight
 
 The ridge logistic regression is able to quantitatively assess the effect of each predictor so that it can give suggestion to the stake holder on how the next telemarketing can be implemented so that the return can be maximized. First of all, the previous successful targets need to be targeted again in the new campaign. Secondly, telemarketing should focus more on retirees rather than the people in early career or those with low-income. In addition, telemarketing will be more likely to succeed when targeting unmarried, non-homeowner and loan-free persons.
 
-## Bibliographies
+
+## References

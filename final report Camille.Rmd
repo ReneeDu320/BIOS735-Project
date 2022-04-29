@@ -34,7 +34,7 @@ In this project, we analyse a telemarketing dataset from a Portuguese retail ban
 
 The goal of this project is to build a classifier using the covariates listed in Table \ref{} to predict whether or not that client subscribed a term deposit. We choose Accuracy, Kappa, Sensitivity, Specificity and F1 Score as the criterion we will use to evaluate model performance. We used logistic regression with a ridge penalty and support vector machines (SVM) as the candidate models. We also developed an R package that can be used to replicate our analysis. All analysis materials are in our Github page [Github link](https://github.com/ReneeDu320/BIOS735-Project). 
 
-```{r, results = "asis", echo = FALSE, message = FALSE}
+```{r DataDescription, results = "asis", echo = FALSE, message = FALSE}
 library(knitr)
 
 tex2markdown <- function(texstring) {
@@ -78,16 +78,11 @@ outcome      & has the client subscribed a term deposit? (binary: yes, no)
 tex2markdown(textable)
 ```
 
-
 ## Data pre-processing
 
 There are four datasets available. We choose the dataset with 16 features and all observations (called `bank-full.csv` on the source website). To ease computational burden, we randomly select 20 percent of the data for our analysis dataset(`dat.working`), which includes 9042 observations.
 
-We dropped the variable `pdays` from the analysis dataset because more than 80% of the data were missing for the variable. We also droped the variable `duration` from the analysis dataset because this variable is collected after company giving phone calls to customers, and this variable has a high correlation with the outcome variable. We also collapsed months into quarters. Continuous variables were centered and scaled by two standard deviations to be put on approximately the same scale as categorical covariates [cite Gelman paper]. 
-
-We hold out 20 percent of the data as a test set for final model performance evaluation. The remaining 80 percent of the data is used as training data to select hyperparameters in the logistic regression and SVM models. 
-
-```{r}
+```{r DataPreprocessing, warning=FALSE}
 # combine the labels
 q1 <- c('mar','feb','jan')
 q2 <- c('apr','may','jun')
@@ -101,11 +96,6 @@ dat_full$month<-recode(dat_full$month,"q1='1_2_3'; q2='4_5_6';
 # drop pdays and duration
 dat = dat_full %>% select(-pdays, -duration)
 
-
-#scaling
-scale2sd <- function(x) {
-  (x - mean(x) )/ (2*sd(x))
-}
 # analysis dataset
 set.seed(100)
 dat.working <- dat %>% 
@@ -116,12 +106,18 @@ dat.working <- dat %>%
   mutate_if(is.character, as.factor) %>% # convert character to factor
   slice_sample(prop = 0.2) # select subset
 ```
+
 A brief overview of some important features from the analysis dataset(`dat.working`) is as follows:
-```{r}
+
+```{r table1}
 table1(~age + job + marital + education + balance|y, data = dat.working)
 ```
 
-```{r}
+We dropped the variable `pdays` from the analysis dataset because more than 80% of the data were missing for the variable. We also droped the variable `duration` from the analysis dataset because this variable is collected after the company's phone call to customers, so that the outcome is already known. Thus, it should not appear in the predictive model. We also collapsed months into quarters. Continuous variables were centered and scaled by two standard deviations to be put on approximately the same scale as categorical covariates [cite Gelman paper]. 
+
+We hold out 20 percent of the data as a test set for final model performance evaluation. The remaining 80 percent of the data is used as training data to select hyperparameters in the logistic regression and SVM models. 
+
+```{r SelectTrain/test}
 # select training and testing data
 set.seed(100)
 y <- dat.working$y
@@ -136,13 +132,16 @@ dat_train <- dat.working[index,]
 dat_test <- dat.working[-index,]
 
 ```
-The following plots show some insights from the priginal dataset. People aged from 25-50 are more considered as potential customers since the density for this age group is especially high in the plot.
 
-```{r}
+The following plots show some insights from the original dataset. People aged from 25-50 are more considered as potential customers since the density for this age group is especially high in the plot.
+
+```{r AgePlot1}
 ggplot(dat_full, aes(x = age, fill = y)) + geom_density(alpha = 0.5,position = 'stack') + theme_classic()+ labs(fill = "subscribed") + ggtitle('age density plot based on labels')
 ```
+
 The following plot gives a distribution of mean_balance over age group. The average balance amount increased along with the increase in age. This is common that aged people typically have a higher balance compared to the young people.
-```{r,include=FALSE}
+
+```{r AgePlot2, include=FALSE}
 data_new = dat_full%>%
   select(age, balance)%>%
   mutate(age_group =  case_when(age < 20 ~ "<20",
@@ -160,16 +159,17 @@ data_new = dat_full%>%
   summarise(mean_balance = sum(balance)/n() )
 ```
 
-```{r}
+```{r AgePlot3}
 ggplot(data_new, aes( y=mean_balance, x=age_group)) + 
     geom_bar(position="dodge", stat="identity",fill = 'plum3') +
   ggtitle('mean_balance by age group') + theme_minimal()
 
 ```
+
 Grouping the job categories into `high_income`(including 'admin.','entrepreneur','management','services','technician'), `low_income`(including 'blue-collar','housemaid','retired','self-employed'), `no_income`(including 'unemployed','student') and `unkown`('unkown'), the number of total compaigns sent to each group has been plotted as below:
 Companies are spending more efforts in engaging high-income group and low-income group, while these two groups have similar subscription rates.
 
-```{r}
+```{r CampaignPlot}
 unknown <- c('unknown')
 no_income <- c('unemployed','student')
 low_income <- c('blue-collar','housemaid','retired','self-employed')
@@ -223,9 +223,7 @@ where the $I_p$ is a $p$ by $p$ identity matrix.
 
 We used Iteratively Reweighted Least Squares (IRLS) @holland1977robust to perform optimization, and select the tuning parameter $\lambda$ using grid search for the $\lambda$ that yields the minimum mean square error (MSE) from cross-validation.
 
-Both logistic regression and ridge logistic regression algorithm using IRLS approach can be summarized as follows:
-![IRLS algorithm](IRLS.png){width=75%}
-
+To decide the optimal cutoff probability for ridge logistic regression, we used the cutoff that maximizes F1 score. F1 score is the harmonic mean of the precision and recall: F1=2(P*R)/(P+R), where P is the precision: TP/(TP + FP), and R is the recall of the classification model: TP/(TP+FN), so that the F1 captures the prediction performance for both positive and negative classes.
 
 ### SVM
 
@@ -242,15 +240,18 @@ Formally, SVM solves the following Lagrangian dual
 
 where $y \in \{-1, 1\}$ are the classification labels, $\alpha$ are the Lagrangian multipliers, $C$ is a tuning parameter chosen by cross-validation, and $K(x, x')$ represents the kernel function. The linear kernel corresponds to the dot product between $x$ and $x'$, and the radial kernel corresponds to $K(x, x') = \exp\left(  \gamma ||x-x'||^2 \right)$ where $\gamma$ is a tuning parameter that will be chosen by cross-validation. 
 
+Since the original SVM is not good at handling class imbalance in the sense that it favors majority class, we performed weighted SVM instead. For the class Y=1, the weight equals $1/mean(Y)$ where Y is the 0/1 outcome for training dataset, and for the class Y=0, the weight equals $1-1/mean(Y)$. Thus, we gave less weight on majority class and more weight on minority class.
+
 We will fit SVM using the R package @kuhn2008building. 
+
 
 ### Model evaluation
 
 We used 5-fold cross validation to select tuning parameters for both logistic regression and SVM. For logistic regression with ridge penalty, there is a hyperparameter, $\lambda$ in our notation above, which controls the amount of penalization. We compare _ different values of $\lambda$, [list the values we test] and chose the $\lambda$ which minimized the mean-squared error. 
 
-For SVM, we used both a linear kernel and a radial basis function (RBF) kernel. SVM with a linear kernel contains a penalization hyperparameter, and SVM with an RBF kernel contains a penalization and [what does gamma control?] hyperparameters. For the linear kernel we test [enter values] and for the RBF kernel we test all combinations of [enter cost values] and [enter gamma values]. The error function to minimize was the mis-classification rate. 
+For SVM, we used both a linear kernel and a radial basis function (RBF) kernel. SVM with a linear kernel contains a penalization hyperparameter $C$, and SVM with an RBF kernel contains a penalization hyperparameter $C$ as well as a tuning parameters $\gamma$ which accounts for the smoothness of the decision boundary and controls the variance of the model. For the linear kernel we test $C$=(0.001, 0.01, 0.1, 1, 5) and for the RBF kernel we test all combinations of $C$=(0.001, 0.01, 0.1, 1) and $\gamma$=(0.03125, 0.12500, 0.50000, 2.00000). The error function to minimize was the mis-classification rate. 
 
-```{r}
+```{r FitRidge}
 # fitting ridge logistic regression
 # get data into format for logistic regression
 x <- model.matrix(y~., dat_train)[,-1]
@@ -288,8 +289,7 @@ ridge.auc = performance(pr.ridge.test, measure = 'auc')@y.values[[1]]
 ```
 
 
-```{r}
-# Model performance - select logistic cutoff using training data
+```{r RidgePerformance}
 pr.ridge.train <- prediction(predict.logistic(model.ridge, x)$prob, dat_train$y)
 # get sensitivity
 sens <- data.frame(x=unlist(performance(pr.ridge.train, "sens")@x.values), 
@@ -297,25 +297,21 @@ sens <- data.frame(x=unlist(performance(pr.ridge.train, "sens")@x.values),
 # get specificity
 spec <- data.frame(x=unlist(performance(pr.ridge.train, "spec")@x.values), 
                    y=unlist(performance(pr.ridge.train, "spec")@y.values))
-# plot sensitivity and specificity as function of cost
-sens %>% ggplot(aes(x,y)) + 
-  geom_line() + 
-  geom_line(data=spec, aes(x,y,col="red")) +
-  scale_y_continuous(sec.axis = sec_axis(~., name = "Specificity")) +
-  labs(x='Cutoff', y="Sensitivity") +
-  theme(axis.title.y.right = element_text(colour = "red"), legend.position="none")
+
+# Select logistic cutoff using training data
+# get precision
+prec <- data.frame(x=unlist(performance(pr.ridge.train, "prec")@x.values), 
+                   y=unlist(performance(pr.ridge.train, "prec")@y.values))
+prec <- prec[-1,]
+# get recall
+rec <- data.frame(x=unlist(performance(pr.ridge.train, "rec")@x.values), 
+                   y=unlist(performance(pr.ridge.train, "rec")@y.values))
+rec <- rec[-1,]
+
+cutoff <- prec$x[which(1/(rec$y)+1/(prec$y)==min(1/(rec$y)+1/(prec$y)))]
 ```
 
-
-```{r, echo=TRUE}
-# show performance metrics based off chosen cutoff
-cutoff <- 0.125
-predicted.classes <- ifelse(probs.ridge.test > cutoff, "yes", "no")
-confusionMatrix(factor(predicted.classes, levels = c('no', 'yes')), dat_test$y, positive = 'yes')$byClass
-```
-
-
-```{r}
+```{r WeightedSVM}
 # weights for svm
 w = rep(mean(y2), nrow(dat_train))
 w = ifelse(y2==1, 1-w, w)
@@ -339,50 +335,68 @@ set.seed(100)
 best.radial = readRDS('radial_svm.RDS')
 ```
 
-```{r, echo=TRUE}
-# print confusion matrices
-# NOTE: what do we want to do with these? 
-# are we printing them out for our own understanding? 
-# or will they go in final report/pres?
-# (here we just want to make sure svm performs equally well on training/testing set. Only the confusion matrix on testing set needs to go in final report)
-# training data; svm linear
-svm.pred.lin <- predict(best.linear)
-confusionMatrix(svm.pred.lin, dat_train$y, positive = 'yes')$byClass
-# test data; svm linear
-svm.pred.lin.test <- predict(best.linear, x.test)
-confusionMatrix(svm.pred.lin.test, dat_test$y, positive = 'yes')$byClass
-# training data; svm radial
-svm.pred.radial <- predict(best.radial, x)
-confusionMatrix(svm.pred.radial, dat_train$y, positive = 'yes')$byClass
-# test data; svm radial
-svm.pred.rad.test <- predict(best.radial, x.test)
-confusionMatrix(svm.pred.rad.test, dat_test$y, positive = 'yes')$byClass
-```
-
-
-
-```{r}
-plot(prf.ridge.test, col = "red", print.auc=TRUE, print.auc.x = 0.5, print.auc.y = 0.3)
-lines(x = c(0,1), y = c(0,1),col="black")
-legend("bottom",
-       legend=c("ridge"),
-       col=c("red"),
-       lwd=4, cex =0.8, xpd = TRUE, horiz = TRUE)
-```
 
 
 ## Results
 
-The chosen $\lambda$ for ridge logistic regression was []. For the SVM models, the chosen penalization hyperparameter for the linear kernel was [], and for the RBF kernel, the chosen penalization and [] hyperparameters were [] and [], respectively. 
+For Ridge logistic regression, the plot of sensitivity and specificity as a function of cutoff probability is shown below. The optimal cutoff probability is 0.206 (which maximizes F1, as stated in Methods).
 
-[report metrics, describe figures/tables]
+```{r ResultRidge1}
+# plot sensitivity and specificity as function of cost
+sens %>% ggplot(aes(x,y)) + 
+  geom_line() + 
+  geom_line(data=spec, aes(x,y,col="red")) +
+  scale_y_continuous(sec.axis = sec_axis(~., name = "Specificity")) +
+  labs(x='Cutoff', y="Sensitivity") +
+  theme(axis.title.y.right = element_text(colour = "red"), legend.position="none")
+```
+
+Using the optimal cutoff, the confusion matrix for prediction on testing dataset, the F1 score, and the ROC curve are shown below. 
+
+```{r ResultRidge2}
+predicted.classes <- ifelse(probs.ridge.test > cutoff, "yes", "no")
+confusionMatrix(factor(predicted.classes, levels = c('no', 'yes')), dat_test$y, positive = 'yes')
+(confusionMatrix(factor(predicted.classes, levels = c('no', 'yes')), dat_test$y, positive = 'yes')$byClass)['F1']
+
+plot(prf.ridge.test, col = "red")
+lines(x = c(0,1), y = c(0,1),col="black")
+text(0.5, 0.3, paste0("AUC = ",round(ridge.auc, 2)),
+     cex=0.65, pos=3,col="red") 
+legend("bottom",
+       legend=c("ridge logistic regression"),
+       col=c("red"),
+       lwd=4, cex =0.8, xpd = TRUE, horiz = TRUE)
+```
+
+For SVM with linear kernel, the confusion matrix for prediction on testing dataset and the F1 score are shown below.
+
+```{r ResultSVM1}
+# test data; svm linear
+svm.pred.lin.test <- predict(best.linear, x.test)
+confusionMatrix(svm.pred.lin.test, dat_test$y, positive = 'yes')
+(confusionMatrix(svm.pred.lin.test, dat_test$y, positive = 'yes')
+$byClass)['F1']
+```
+
+For SVM with radial kernel, the confusion matrix for prediction on testing dataset and the F1 score are shown below.
+
+```{r ResultSVM2}
+# test data; svm radial
+svm.pred.rad.test <- predict(best.radial, x.test)
+confusionMatrix(svm.pred.rad.test, dat_test$y, positive = 'yes')
+(confusionMatrix(svm.pred.rad.test, dat_test$y, positive = 'yes')$byClass)['F1']
+```
+
+The chosen $\lambda$ for ridge logistic regression was 0.013. For the SVM models, the chosen cost hyperparameter for the linear kernel was 0.1, and for the RBF kernel, the chosen cost and $\gamma$ were 1 and 0.125, respectively. The numbers of support vectors are 5370 and 5490, respectively, for linear and kernel SVM.
+
+Form the three confusion matrices above, we can see that the F1 score for ridge logistic regression and radial kernel SVM are similar (0.359 and 0.355), while the F1 score for linear SVM is smaller (0.327). Comparing the two SVM models, radial kernel is overall better than linear kernel in the sense of sensitivity and specificity additional to F1 score. However, it is not straightforward to tell whether the radial SVM is better than the ridge logistic regression. The former has higher sensitivity (0.63 over 0.39), while the latter has higher specificity (0.89 over 0.75).
 
 ### Variables of interest
-Table ? shows the regularized coefficient of each predictor from ridge logistic regression model. According to the ridge logistic regression, we found several variables contributing the success of telemarketing. The strongest predictor is the outcome of previous telemarketing campaign ($\hat{\beta}=2.15$), which means a client is much more likely to make a deposit if the client made a deposit in the previous telemarketing campaign. This finding suggests that targeting existing client is the most efficient way of telemarketing in our analysis. The second most predictive variable is job type. In our analysis, we found clients that are entrepreneur are the least likely to make a deposit ($\hat{\beta}=-1.39$), followed by self-employed ($\hat{\beta}=-0.51$) and blue collar ($\hat{\beta}=-0.47$). On the contrary, retired client is more likely to make a deposit ($\hat{\beta}=0.31$). Interestingly, married person, home owner and person with loan  are less likely to contribute a deposit ($\hat{\beta}=-0.65$), ($\hat{\beta}=-0.74$) and ($\hat{\beta}=-0.52$) respectively, which indicate they are probably the same group of people.
+Table 2 shows the regularized coefficient of each predictor from ridge logistic regression model. According to the ridge logistic regression, we found several variables contributing the success of telemarketing. The strongest predictor is the outcome of previous telemarketing campaign ($\hat{\beta}=2.15$), which means a client is much more likely to make a deposit if the client made a deposit in the previous telemarketing campaign. This finding suggests that targeting existing client is the most efficient way of telemarketing in our analysis. The second most predictive variable is job type. In our analysis, we found clients that are entrepreneur are the least likely to make a deposit ($\hat{\beta}=-1.39$), followed by self-employed ($\hat{\beta}=-0.51$) and blue collar ($\hat{\beta}=-0.47$). On the contrary, retired client is more likely to make a deposit ($\hat{\beta}=0.31$). Interestingly, married person, home owner and person with loan  are less likely to contribute a deposit ($\hat{\beta}=-0.65$), ($\hat{\beta}=-0.74$) and ($\hat{\beta}=-0.52$) respectively, which indicate they are probably the same group of people.
 
-add ridge logistic regression output table here
-
-
+```{r regressionCoefficient, echo=FALSE, fig.cap="Table 2: Regularized coefficients", out.width = '45%'}
+knitr::include_graphics("ridge coefficients.png")
+```
 
 
 ## Discussion

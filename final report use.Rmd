@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = FALSE)
 # load packages
 pkgs <- list('tidyverse', 'table1', 'e1071', 'caret', 'ROCR', 'devtools', 'OptimalCutpoints', 'car', 'WeightSVM')
 lapply(pkgs, require, character.only = T)
-#load_all('./final')
+load_all('./final')
 
 # set ggplot theme
 theme_set(theme_bw())
@@ -223,7 +223,8 @@ where the $I_p$ is a $p$ by $p$ identity matrix.
 
 We used Iteratively Reweighted Least Squares (IRLS) @holland1977robust to perform optimization, and select the tuning parameter $\lambda$ using grid search for the $\lambda$ that yields the minimum mean square error (MSE) from cross-validation.
 
-
+Both logistic regression and ridge logistic regression algorithm using IRLS approach can be summarized as follows:
+![IRLS algorithm](IRLS.png){width=75%}
 
 
 ### SVM

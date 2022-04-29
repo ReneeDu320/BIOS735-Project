@@ -7,13 +7,14 @@
 logLik(eta, y)
 }
 \arguments{
-\item{eta}{FILL ME IN}
+\item{eta}{an n by 1 vector containing the linear combination of predictors and coefficient}
 
-\item{y}{FILL ME IN}
+\item{y}{an n by 1 vector containing the outcome variable}
 }
 \value{
-FILL ME IN
+the log likelihood of logistic regression
 }
 \description{
-FILL ME IN
+This function calculates the log likelihood of logistic regression
+based on given vector of eta and outcome
 }

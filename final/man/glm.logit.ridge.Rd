@@ -4,14 +4,19 @@
 \alias{glm.logit.ridge}
 \title{ridge logistic regression using design matrix and Y}
 \usage{
-glm.logit.ridge(X, y, lambda = 1, tol = 1e-07, maxit = 50)
+glm.logit.ridge(X, y, lambda = 1, tol = 1e-07, maxit = 50, trace = FALSE)
 }
 \arguments{
-\item{X}{FILL ME IN}
+\item{X}{an n by p matrix containing the design matrix X, the predictors}
+
+\item{y}{an n by 1 vector containing the outcome variable}
+
+\item{lambda}{a scalar value as penalty for ridge logistic regression}
 }
 \value{
-FILL ME IN
+the IRLS estimate of regression coefficients
 }
 \description{
-FILL ME IN
+this function fit the ridge logistic regression using design matrix X and response variable Y
+this model use iteratively reweighted least square algorithm to estimate coefficient of X
 }

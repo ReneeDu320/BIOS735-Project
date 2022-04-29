@@ -2,16 +2,20 @@
 % Please edit documentation in R/logistic_reg.R
 \name{predict.logistic}
 \alias{predict.logistic}
-\title{FILL ME IN}
+\title{Predict outcome using fitted model of ridge logistic regression}
 \usage{
 \method{predict}{logistic}(fit, X, prob_cut = 0.5)
 }
 \arguments{
-\item{fit}{FILL ME IN}
+\item{fit}{previously fitted object using ridge logistic regression}
+
+\item{X}{an n by p matrix as new design matrix used to predict new outcome}
+
+\item{prob_cut}{and scalar value between 0 and 1, the probability cutoff to set the cutoff setting outcome as 0 or 1}
 }
 \value{
-FILL ME IN
+a list object containing the predicted outcome and their correspoding probability
 }
 \description{
-FILL ME IN
+This function use previously fitted ridge logistic model to predict new outcome using new design matrix
 }

@@ -83,11 +83,6 @@ tex2markdown(textable)
 
 There are four datasets available. We choose the dataset with 16 features and all observations (called `bank-full.csv` on the source website). To ease computational burden, we randomly select 20 percent of the data for our analysis dataset(`dat.working`), which includes 9042 observations.
 
-A brief overview of some important features from the analysis dataset(`dat.working`) is as follows:
-```{r}
-table1(~age + job + marital + education + balance|y, data = dat.working)
-```
-
 We dropped the variable `pdays` from the analysis dataset because more than 80% of the data were missing for the variable. We also droped the variable `duration` from the analysis dataset because this variable is collected after company giving phone calls to customers, and this variable has a high correlation with the outcome variable. We also collapsed months into quarters. Continuous variables were centered and scaled by two standard deviations to be put on approximately the same scale as categorical covariates [cite Gelman paper]. 
 
 We hold out 20 percent of the data as a test set for final model performance evaluation. The remaining 80 percent of the data is used as training data to select hyperparameters in the logistic regression and SVM models. 
@@ -120,6 +115,10 @@ dat.working <- dat %>%
          previous = scale2sd(previous)) %>% # put continuous vars on same scale as indicators
   mutate_if(is.character, as.factor) %>% # convert character to factor
   slice_sample(prop = 0.2) # select subset
+```
+A brief overview of some important features from the analysis dataset(`dat.working`) is as follows:
+```{r}
+table1(~age + job + marital + education + balance|y, data = dat.working)
 ```
 
 ```{r}

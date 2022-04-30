@@ -20,4 +20,5 @@ A copy of the initial project proposal 'Updated_proposal BIOS735 Team6.pdf' and 
 
 Our R-package implementation is kept in 'final' folder. For more information about the functions please refer to the report.
 
+To install the package, download the file `final_0.0.0.9000.tar.gz`, navigate to its directory, and run `install.packages("final_0.0.0.9000.tar.gz", repos=NULL)`. You can then load the package as usual using `library(final)`. 
 

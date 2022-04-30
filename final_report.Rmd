@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = FALSE, message=FALSE)
 # load packages
 pkgs <- list('tidyverse', 'table1', 'e1071', 'caret', 'ROCR', 
              'devtools', 'OptimalCutpoints', 'car', 'WeightSVM', 
-             'knitr', 'kableExtra')
+             'knitr', 'kableExtra', 'gridExtra')
 lapply(pkgs, require, character.only = T)
 load_all('./final')
 
@@ -23,11 +23,6 @@ theme_set(theme_bw())
 # run_from_scratch = FALSE uses saved model objects
 # set to TRUE if want to run from scratch
 run_from_scratch = FALSE
-
-# sensitivity analysis
-# if set to true, will have to run from scratch
-do_standardize = FALSE
-if (do_standardize) (run_from_scratch = TRUE)
 
 # read data
 dat_full <- read_delim("bank-full.csv", delim=';')
@@ -78,7 +73,6 @@ previous     & number of contacts performed before this campaign and for this cl
 poutcome     & outcome of previous campaign (categorical: unknown, other, failure, success) \\\\
 outcome      & has the client subscribed a term deposit? (binary: yes, no)                                                                                                               
 \\end{tabular}
-\\label{table:1}
 \\end{table}
 "
 
@@ -91,11 +85,9 @@ There are four datasets available. We chose the dataset with 16 features and all
 
 The features are described in Table 1 and summary statistics are computed and shown in Table 2. The features include some basic demographic and financial information on clients as well as some information on previous contacts. There were some missing values in the categorical features and these observations were treated as their own category, "unknown," and are shown in Table 2. We also collapsed months into quarters. The feature `pdays` was mostly missing (80%) so it was dropped from the analysis dataset. Additionally, the feature `duration` refers to the duration of the phone call that corresponds to the outcome variable and was therefore also dropped from the analysis dataset since the goal was to predict prospectively. 
 
-Continuous variables were centered and scaled by two standard deviations to be put on approximately the same scale as categorical covariates @gelman. 
+Continuous variables were centered and scaled by two standard deviations to be put on approximately the same scale as categorical covariates @gelman. This transformation allows coefficients to be readily and easily interpreted while also allowing for each term to be penalized approximately the same. As a sensitivity check, regular standardization (centering and scaling by one standard deviation) was performed on all covariates and the analysis re-run for SVM, and we found no substantial differences in results. 
 
 The binary outcome variable is highly imbalanced, with 7983 (88%) failures and 1059 (12%) successes. 
-
-We held out 20 percent of the data as a test set for final model performance evaluation. The remaining 80 percent of the data was used as training data to select hyperparameters in the logistic regression and SVM models. 
 
 
 ```{r DataPreprocessing, warning=FALSE}
@@ -215,13 +207,11 @@ ggplot(dat_plot, aes(fill=y, y=avg_campaign, x=reorder(job, avg_campaign, functi
 
 # put continuous vars on same scale as indicators
 # put here b/c want summary table/figures to show on raw scale
-if (!do_standardize) {
-  dat.working = dat.working %>%
-    mutate(age = scale2sd(age),
-           campaign = scale2sd(campaign),
-           balance = scale2sd(balance),
-           previous = scale2sd(previous))
-}
+dat.working = dat.working %>%
+  mutate(age = scale2sd(age),
+         campaign = scale2sd(campaign),
+         balance = scale2sd(balance),
+         previous = scale2sd(previous))
 
 # select training and testing data
 set.seed(100)
@@ -245,17 +235,21 @@ We chose logistic regression as our likelihood-based model since it allows for c
 
 Support vector machines were chosen for their flexibility and good out-of-box performance for classification. By fitting SVM using both linear and RBF kernels, we allow for flexibility in the relationship between the outcome and features. 
 
+We held out 20 percent of the data as a test set for final model performance evaluation. The remaining 80 percent of the data was used as training data to select hyperparameters in the logistic regression and SVM models. We chose F1 score as our final metric for model comparison. F1 score is the harmonic mean of the precision and recall: $F1 = \frac{2(P \cdot R)}{P+R}$, where $P$ is the precision: $\frac{TP}{TP + FP}$, and $R$ is the recall of the classification model: $\frac{TP}{TP + FN}$, where $TP$ is the number of true positives, $FP$ is the number of false positives, and $FN$ is the number of false negatives.
+
 
 ### Logistic regression with ridge penalty
 
-We will use the logistic regression modelling framework. We have $i=1, 2, ... , n$ subjects. We observe the outcome $Y_{i}$ for subject $i$, and we observe the subject's covariates $x_{i}$.
+We develop the algorithm to fit a ridge logistic regression model by first introducing the logistic regression model without any penalization. Let $i=1, 2, \dots , n$ be the number of subjects. We observe the outcome $Y_{i}$ for subject $i$, and we observe the subject's covariates $x_{i}$.
 
 Assume $y_{i}|x_{i}\sim Binomial(1, p_{i})$ for $i=1, ..., n$;
 $logit(p_{i})=log(\frac{p_{i}}{1-p_{i}})=x_{i}^T\beta=\eta_{i}$ for $i=1, ..., n$. Thus, the log-likelihood function of $\beta$ for the logistic regression model is given by
 \begin{equation}
 	l_{n}(\beta)=\sum_{i=1}^{n}\left\{y_{i}x_{i}^T\beta-log(1+exp(x_{i}^T\beta)) \right\}
 \end{equation}
-We will use Newton-Raphson algorithm to obtain the ML estimate $\hat{\beta}$ in this GLM model by
+
+We use iteratively re-weighted least squares (IRLS) to obtain the ML estimate $\hat{\beta}$ in this GLM model by
+
 \begin{equation}
 \begin{aligned}
 	\beta^{(t+1)}&=\beta^{(t)}-l''(\beta^{(t+1)})^{-1}l'(\beta^{(t)})\\
@@ -263,17 +257,19 @@ We will use Newton-Raphson algorithm to obtain the ML estimate $\hat{\beta}$ in 
 	&=\beta^{(t)}+h^{(t)}
 \end{aligned}
 \end{equation}
-where $p^{(t)}$ depends on $\beta^{(t)}$ and $W$ is a diagonal matrix with the $i$th diagonal element having value equal to $p_{i}(1-p_{i})$. $W^{(t)}$ is a function of $p^{(t)}$.
 
-If we performed L2 regularization approach using ridge logistic regression @zou2005regularization. The objective function is the penalized log-likelihood, and is
+where $p^{(t)}$ depends on $\beta^{(t)}$ and $W$ is a diagonal matrix with the $i$th diagonal element having value equal to $p_{i}(1-p_{i})$. $W^{(t)}$ is a function of $p^{(t)}$. Since logistic regression uses the canonical link function, the IRLS solution is equivalent to Newton-Raphson. 
+
+If we regularize the model with an L2 penalty we get ridge logistic regression @zou2005regularization. The objective function is then the log-likelihood with the penalty term:
+
 \begin{equation}
 	-\left[\frac{1}{N}\sum_{i=1}^{n}\left\{y_{i}x_{i}^T\beta-log(1+exp(x_{i}^T\beta)) \right\}\right]+\lambda(||\beta||_{2}),
 \end{equation}
-where $\lambda$ is a tuning parameter for the L2 the penalty. 
-Similarly to Newton-Rapson algorithm, the optimization function to obtain the ridge estimated $\hat{\beta}_{ridge}$, the coefficients of ridge logistic regression is given by
+
+where $\lambda$ is a tuning parameter that controls the amount of penalization. The IRLS solution to this problem is similar as before, and the ridge estimate of the coefficients, $\hat{\beta}_{ridge}$, are found by iteratively updating using the following:
 
 $$
-\beta_{t+1} = \beta_t + (X^TWX + \lambda I_p)^{-1}X^T(y-p),
+\beta^{(t+1)} = \beta^{(t)} + (X^TWX + \lambda I_p)^{-1}X^T(Y-p^{(t)}),
 $$
 where the $I_p$ is a $p$ by $p$ identity matrix.
 
@@ -282,11 +278,12 @@ We used Iteratively Reweighted Least Squares (IRLS) @holland1977robust to perfor
 Both logistic regression and ridge logistic regression algorithm using IRLS approach can be summarized as follows:
 ![IRLS algorithm](IRLS.png){width=75%}
 
-To decide the optimal cutoff probability for ridge logistic regression, we used the cutoff that maximizes F1 score. F1 score is the harmonic mean of the precision and recall: F1=2(P*R)/(P+R), where P is the precision: TP/(TP + FP), and R is the recall of the classification model: TP/(TP+FN), so that the F1 captures the prediction performance for both positive and negative classes.
+Since (ridge) logistic regression models the probability of an outcome, to get class predictions, a cutoff probability must be specified. To decide the optimal cutoff probability for ridge logistic regression, we used the cutoff that maximizes F1 score. 
+
 
 ### SVM
 
-Support vector machines (SVM) @cortes1995support are a popular machine learning method for binary classification. SVM classifies observations by separating the feature space into two classes with the goal of maximizing the number of correct classifications while allowing for some mis-classifications for identifiability and to prevent over-fitting. The form of the decision boundary is controlled by choice of the kernel function. We will fit SVM models using linear and radial kernels. 
+Support vector machines (SVM) @cortes1995support are a popular machine learning method for binary classification. SVM classifies observations by separating the feature space into two classes according to some decision boundary form with the goal of maximizing the number of correct classifications while allowing for some mis-classifications for identifiability and to prevent over-fitting. The form of the decision boundary is controlled by choice of the kernel function. We fitted SVM models using linear and radial kernels. 
 
 Formally, SVM solves the following Lagrangian dual
 
@@ -299,16 +296,17 @@ Formally, SVM solves the following Lagrangian dual
 
 where $y \in \{-1, 1\}$ are the classification labels, $\alpha$ are the Lagrangian multipliers, $C$ is a tuning parameter chosen by cross-validation, and $K(x, x')$ represents the kernel function. The linear kernel corresponds to the dot product between $x$ and $x'$, and the radial kernel corresponds to $K(x, x') = \exp\left(  \gamma ||x-x'||^2 \right)$ where $\gamma$ is a tuning parameter that will be chosen by cross-validation. 
 
-Since the original SVM is not good at handling class imbalance in the sense that it favors majority class, we performed weighted SVM instead. For the class Y=1, the weight equals $1/mean(Y)$ where Y is the 0/1 outcome for training dataset, and for the class Y=0, the weight equals $1-1/mean(Y)$. Thus, we gave less weight on majority class and more weight on minority class.
+Since SVM is not good at handling class imbalance in the sense that it favors the majority class, we performed weighted SVM instead. In our dataset, the majority class are the negatives i.e. $Y=-1$. For the class $Y=-1$, the weight equals $\frac{1}{n} \sum_{i=1}^n I(Y_i=1)$ and for the class $Y=1$, the weight equals $1-\frac{1}{n} \sum_{i=1}^n I(Y_i=1)$. Thus, we down-weighted the majority class and up-weighted the minority class.
 
-We will fit SVM using the R package @kuhn2008building. 
+We fit SVM using the R packages `e1071` and `WeightSVM`.  
 
 
 ### Model evaluation
 
-We used 5-fold cross validation to select tuning parameters for both logistic regression and SVM. For logistic regression with ridge penalty, there is a hyperparameter, $\lambda$ in our notation above, which controls the amount of penalization. We compare _ different values of $\lambda$, [list the values we test] and chose the $\lambda$ which minimized the mean-squared error. 
+We used 5-fold cross validation to select tuning parameters for both logistic regression and SVM. For logistic regression with ridge penalty, there is a hyperparameter, $\lambda$ in our notation above, which controls the amount of penalization. We compare 10 different values of $\lambda$, $\exp(\{-5, -4.33, \dots, 1 \})$ and chose the $\lambda$ which minimized the mean-squared error. 
 
-For SVM, we used both a linear kernel and a radial basis function (RBF) kernel. SVM with a linear kernel contains a penalization hyperparameter $C$, and SVM with an RBF kernel contains a penalization hyperparameter $C$ as well as a tuning parameters $\gamma$ which accounts for the smoothness of the decision boundary and controls the variance of the model. For the linear kernel we test $C$=(0.001, 0.01, 0.1, 1, 5) and for the RBF kernel we test all combinations of $C$=(0.001, 0.01, 0.1, 1) and $\gamma$=(0.03125, 0.12500, 0.50000, 2.00000). The error function to minimize was the mis-classification rate. 
+For SVM, we used both a linear kernel and a radial basis function (RBF) kernel. SVM with a linear kernel contains a penalization hyperparameter $C$, and SVM with an RBF kernel contains a penalization hyperparameter $C$ as well as a tuning parameter $\gamma$ which accounts for the smoothness of the decision boundary and controls the variance of the model. For the linear kernel we test $C=(0.001, 0.01, 0.1, 1, 5)$ and for the RBF kernel we test all combinations of $C=(0.001, 0.01, 0.1, 1)$ and $\gamma=(0.03125, 0.12500, 0.50000, 2.00000)$. The error function to minimize was the mis-classification rate. 
+
 
 ```{r FitRidge}
 # fitting ridge logistic regression
@@ -317,31 +315,22 @@ x <- model.matrix(y~., dat_train)[,-1]
 x.test <- model.matrix(y~., dat_test)[,-1]
 y2 <- ifelse(dat_train$y == "yes", 1, 0)
 
-if (do_standardize) {
-  x.old = x
-  x.old[,'age'] = scale2sd(x.old[,'age'])
-  x.old[,'campaign'] = scale2sd(x.old[,'campaign'])
-  x.old[,'balance'] = scale2sd(x.old[,'balance'])
-  x.old[,'previous'] = scale2sd(x.old[,'previous'])
-  x = scale(x)
-  x.test = scale(x.test)
-}
-
 # penalty parameters to test (on log-scale)
 # NOTE: should change function argument to make clear it is on log-scale e.g. name it loglambda
 lambdas = seq(-5,1,length.out=10)
 
 # fit models using cv (read from file to save computation time)
-# if (run_from_scratch) {
-#   # set seed
-#   set.seed(100)
-#   
-#   # takes about 13 mins
-#   cv.ridgeLR <- cv.glm.logit.ridge(x, y2, lambdas, fold=5)
-#   saveRDS(cv.ridgeLR, 'cv_ridge.rds')
-# } else {
+if (run_from_scratch) {
+  # set seed
+  set.seed(100)
+
+  # takes about 13 mins
+  cv.ridgeLR <- cv.glm.logit.ridge(x, y2, lambdas, fold=5)
+  saveRDS(cv.ridgeLR, 'cv_ridge.rds')
+  
+} else {
   cv.ridgeLR = readRDS('cv_ridge.rds')
-# }
+}
 
 # best ridge logistic reg model
 model.ridge <- glm.logit.ridge(x, y2, lambda = cv.ridgeLR$lambda.min)
@@ -402,13 +391,12 @@ if (run_from_scratch) {
   
   # save
   saveRDS(best.linear, 'cv_sim_lin.rds')
+  
 } else {
   best.linear = readRDS('cv_sim_lin.rds')
 }
 
 # Radial SVM
-set.seed(100)
-
 if (run_from_scratch) {
   
   # set seed
@@ -423,18 +411,19 @@ if (run_from_scratch) {
   
   # save
   saveRDS(best.radial, file = "radial_svm.RDS")
+  
 } else {
   best.radial = readRDS('radial_svm.RDS')
 }
 ```
 
 
-
 ## Results
 
-The chosen $\lambda$ for ridge logistic regression was 0.013. For the SVM models, the chosen cost hyperparameter for the linear kernel was 0.1, and for the RBF kernel, the chosen cost and $\gamma$ were 1 and 0.125, respectively. The numbers of support vectors are 5370 and 5490, respectively, for linear and kernel SVM.
+The chosen $\lambda$ for ridge logistic regression was 1.4. For the SVM models, the chosen cost hyperparameter for the linear kernel was 0.1, and for the RBF kernel, the chosen cost and $\gamma$ were 1 and 0.125, respectively. The numbers of support vectors are 5368 and 5497, respectively, for linear and kernel SVM.
 
-For Ridge logistic regression, the plot of sensitivity and specificity as a function of cutoff probability is shown below. The optimal cutoff probability is 0.206 (which maximizes F1, as stated in Methods).
+For ridge logistic regression, the plot of sensitivity and specificity as a function of cutoff probability is shown in Figure 5 The optimal cutoff probability is 0.202, which maximizes F1 as stated in the Methods section. Figure 6 shows the ROC curve for ridge logistic regression model in red (black is a reference line for the worst case), and the area under the ROC curve was computed to be 0.73. 
+
 
 ```{r ResultRidge1}
 # plot sensitivity and specificity as function of cost
@@ -484,32 +473,16 @@ pred_metrics = tibble(Metric = names(ridge.train.res),
                       `SVM radial kernel, test` = svm.rad.test.res)
 ```
 
-Using the optimal cutoff, the confusion matrix for prediction on testing dataset and the ROC curve are shown below. 
+
 
 ```{r ResultRidge2}
-confusionMatrix(factor(ridge.pred.test, levels = c('no', 'yes')), dat_test$y, positive = 'yes')$table
-
 plot(prf.ridge.test, col = "red", main='Figure 6: ROC plot for ridge logistic regression model')
 lines(x = c(0,1), y = c(0,1),col="black")
 text(0.5, 0.3, paste0("AUC = ",round(ridge.auc, 2)),
      cex=0.65, pos=3,col="red") 
 ```
 
-For SVM with linear kernel, the confusion matrix for prediction on testing dataset are shown below.
 
-```{r linearSVM}
-# display results
-confusionMatrix(svm.pred.lin.test, dat_test$y, positive = 'yes')$table
-```
-
-For SVM with radial kernel, the confusion matrix for prediction on testing dataset are shown below.
-
-```{r radialSVM}
-# display results
-confusionMatrix(svm.pred.rad.test, dat_test$y, positive = 'yes')$table
-```
-
-Table 3 shows all the model performance evaluation metrics using three methods on training and testing datasets.
 
 ```{r ResultAll2}
 # display results
@@ -519,10 +492,63 @@ kable(pred_metrics, caption='Table 3',
 
 <br>
 
-From the three confusion matrices above, we can see that the F1 score for ridge logistic regression and radial kernel SVM are similar (0.359 and 0.355), while the F1 score for linear SVM is smaller (0.327). Comparing the two SVM models, radial kernel is overall better than linear kernel in the sense of sensitivity and specificity additional to F1 score. However, it is not straightforward to tell whether the radial SVM is better than the ridge logistic regression. The former has higher sensitivity (0.63 over 0.39), while the latter has higher specificity (0.89 over 0.75).
+```{r, fig.cap="Figure 7: Confusion matrices for all three models predicted on test set"}
+
+# function to create data frames w/ confusion matrix vals
+create_conf_df <- function(pred, actual) {
+  dat = data.frame(Predicted = c('no', 'yes', 'no', 'yes'),
+                   Actual = c('no', 'no', 'yes', 'yes'),
+                   props = c(mean(pred=='no' & actual=='no'),
+                             mean(pred=='yes' & actual=='no'),
+                             mean(pred=='no' & actual=='yes'),
+                             mean(pred=='yes' & actual=='yes')))
+  dat$props = round(dat$props, 3)
+  return(dat)
+}
+
+# create confusion matrix df for each model on test data
+conf.ridge = create_conf_df(ridge.pred.test, dat_test$y)
+conf.svm.lin = create_conf_df(svm.pred.lin.test, dat_test$y)
+conf.svm.rad = create_conf_df(svm.pred.rad.test, dat_test$y)
+
+# create ggplot objects
+gg.svm.ridge = ggplot(data =  conf.ridge, mapping = aes(x = Actual, y = Predicted)) +
+  geom_tile(colour = "black", fill='white') +
+  geom_text(aes(label = props), vjust = 1) +
+  theme(legend.position = "none") +
+  labs(title = '(a) Ridge logistic regression') +
+  scale_y_discrete(limits=rev)
+
+gg.svm.lin = ggplot(data =  conf.svm.lin, mapping = aes(x = Actual, y = Predicted)) +
+  geom_tile(colour = "black", fill='white') +
+  geom_text(aes(label = props), vjust = 1) +
+  theme(legend.position = "none") +
+  labs(title = '(b) SVM with linear kernel') +
+  scale_y_discrete(limits=rev)
+
+gg.svm.rad = ggplot(data =  conf.svm.rad, mapping = aes(x = Actual, y = Predicted)) +
+  geom_tile(colour = "black", fill='white') +
+  geom_text(aes(label = props), vjust = 1) +
+  theme(legend.position = "none") +
+  labs(title = '(c) SVM with radial kernel') +
+  scale_y_discrete(limits=rev)
+
+# plot
+grid.arrange(gg.svm.ridge, gg.svm.lin, gg.svm.rad, nrow=2)
+
+```
+
+
+<br>
+
+Table 3 shows all the model performance evaluation metrics using the three methods on training and testing datasets, and Figure 7 shows the confusion matrices for the predictions of each method on the testing dataset.
+
+From Table 3, we can see that the test set F1 score for ridge logistic regression and radial kernel SVM are similar (0.354 and 0.357, respectively), while the F1 score for linear kernel SVM is slightly lower (0.326). However, examining the confusion matrices in Figure 7 shows that although ridge logistic regression and radial kernel SVM gave similar F1 scores, the predictions of each method were different. Radial SVM predicted more observations to be successes than the ridge logistic regression model. Additionally, radial SVM had higher sensitivity (0.626 vs. 0.398) while ridge logistic regression had higher specificity (0.887 vs. 0.752). 
+
 
 ### Variables of interest
-Table 4 shows the regularized coefficient of each predictor from ridge logistic regression model. According to the ridge logistic regression, we found several variables contributing the success of telemarketing. The strongest predictor is the outcome of previous telemarketing campaign ($\hat{\beta}=2.15$), which means a client is much more likely to make a deposit if the client made a deposit in the previous telemarketing campaign. This finding suggests that targeting existing client is the most efficient way of telemarketing in our analysis. The second most predictive variable is job type. In our analysis, we found clients that are entrepreneur are the least likely to make a deposit ($\hat{\beta}=-1.39$), followed by self-employed ($\hat{\beta}=-0.51$) and blue collar ($\hat{\beta}=-0.47$). On the contrary, retired client is more likely to make a deposit ($\hat{\beta}=0.31$). Interestingly, married person, home owner and person with loan  are less likely to contribute a deposit ($\hat{\beta}=-0.65$), ($\hat{\beta}=-0.74$) and ($\hat{\beta}=-0.52$) respectively, which indicate they are probably the same group of people.
+
+Table 4 shows the estimated coefficients for each predictor from the ridge logistic regression model. According to the model, there were several variables contributing to the success of telemarketing. The strongest predictor, unsurprisingly, is the outcome of a previous telemarketing campaign ($\hat{\beta}=1.97$), which means a client is much more likely to make a deposit if the client made a deposit in the previous telemarketing campaign, all else equal. This finding suggests that targeting existing client is the most efficient way of telemarketing in our analysis. The second most predictive variable is job type. In our analysis, we found clients who are entrepreneurs were less likely to make a deposit ($\hat{\beta}=-1.0$). On the contrary, retired clients were more likely to make a deposit ($\hat{\beta}=0.35$). Interestingly, married individuals, home owners, and individuals with loans were less likely to contribute a deposit ($\hat{\beta}=-0.64$), ($\hat{\beta}=-0.74$) and ($\hat{\beta}=-0.51$) respectively, all else equal. 
 
 
 ```{r regressionCoefficient2}
@@ -553,11 +579,20 @@ kable(coef_table, caption='Table 4: Coefficients of ridge logistic regression mo
 
 ```
 
+
 ## Discussion
 
-The mis-classification error for the best model was [10-11] percent, only slightly better than the mis-classification error achieved for the naive model of predicting failure for all clients (12 percent). 
+All three methods yielded roughly equivalent F1 scores. When comparing secondary metrics, the two SVM models again performed roughly similar while logistic regression performed worse in some metrics but better than others. For example, noting again that F1 score is the harmonic mean between precision and recall, we observed that the two SVM models had substantially higher recall but slightly lower precision than the ridge logistic regression model (note that the harmonic mean up-weights the importance of the smallest value, compared to the arithmetic mean). 
 
-The ridge logistic regression is able to quantitatively assess the effect of each predictor so that it can give suggestion to the stake holder on how the next telemarketing can be implemented so that the return can be maximized. First of all, the previous successful targets need to be targeted again in the new campaign. Secondly, telemarketing should focus more on retirees rather than the people in early career or those with low-income. In addition, telemarketing will be more likely to succeed when targeting unmarried, non-homeowner and loan-free persons.
+The raw mis-classification error for all models was also lower than the naive model of predicting failure for all clients (12 percent). This observation points to how optimizing for different metrics can yield very different conclusions as to what constitutes the best model. 
+
+For example, if we imagine that the bank under study desired a prediction tool which could screen out individuals who were very unlikely to subscribe a term deposit. In this case, they would want to minimize the number of false negatives while maximizing the number of true negatives. Equivalently, this would mean maximizing the negative predictive value. We could also imagine the bank wanting a small list of clients to target but also wanting to not leave out any individuals who would actually subscribe a term deposit. Then, this would be equivalent to maximizing sensitivity, or the ratio of true positives to false negatives. 
+
+The ridge logistic regression is able to quantitatively assess the association of each predictor with the subscription outcome, which may suggest ways on how to implement the next telemarketing campaign. First, individuals who previously subscribed should be targeted again in the new campaign. Second, telemarketing may benefit from targeting retirees, the unmarried, non-homeowners, and loan-free individuals. 
+
+Finally, we note two limitations of any prediction model using this dataset. First, applying models based on historical data to future populations requires an assumption of transportability. If the future population is substantially different from the historical population the model is based on, in the sense that their relationship to the outcome variable has changed, then that would limit the applicability of the model. For example, consider if this data was collected during a period of general confidence in banks and financial systems. Now imagine an event happens after the data is collected such as a recession or banking failure which reduces confidence in banks for many individuals. If confidence in banks is important for whether or not an individuals subscribes a term deposit, and if there is no way to predict this variable, then models trained on the historical data would have limited utility.
+
+Second, we note the limitation that the outcome variable is binary, when in practice, it is likely that banks would care about the amount which an individual deposits. 
 
 
 ## References

@@ -125,6 +125,7 @@ table1(~.|y, data = dat.working,
        caption = 'Table 2: Summary of features, by observed success/failure')
 ```
 
+<br>
 
 Figures 1-4 show some insights from the data. Figure 1 shows a density plot of age by subscription status. Most individuals in the data are between 25 and 60 years old. Additionally, relatively more individuals subcribed than not at the extremes of the age distribution.  
 
@@ -431,6 +432,8 @@ if (run_from_scratch) {
 
 ## Results
 
+The chosen $\lambda$ for ridge logistic regression was 0.013. For the SVM models, the chosen cost hyperparameter for the linear kernel was 0.1, and for the RBF kernel, the chosen cost and $\gamma$ were 1 and 0.125, respectively. The numbers of support vectors are 5370 and 5490, respectively, for linear and kernel SVM.
+
 For Ridge logistic regression, the plot of sensitivity and specificity as a function of cutoff probability is shown below. The optimal cutoff probability is 0.206 (which maximizes F1, as stated in Methods).
 
 ```{r ResultRidge1}
@@ -444,21 +447,7 @@ sens %>% ggplot(aes(x,y)) +
   theme(axis.title.y.right = element_text(colour = "red"), legend.position="none")
 ```
 
-Using the optimal cutoff, the confusion matrix for prediction on testing dataset, the F1 score, and the ROC curve are shown below. 
-
-```{r ResultRidge2}
-plot(prf.ridge.test, col = "red", main='Figure 6: ROC plot for ridge logistic regression model')
-lines(x = c(0,1), y = c(0,1),col="black")
-text(0.5, 0.3, paste0("AUC = ",round(ridge.auc, 2)),
-     cex=0.65, pos=3,col="red") 
-```
-
-For SVM with linear kernel, the confusion matrix for prediction on testing dataset and the F1 score are shown below.
-
-
-For SVM with radial kernel, the confusion matrix for prediction on testing dataset and the F1 score are shown below.
-
-```{r ResultAll}
+```{r ResultAll1}
 
 # train data; ridge
 ridge.pred.train <- ifelse(probs.ridge.train > cutoff, "yes", "no")
@@ -493,18 +482,47 @@ pred_metrics = tibble(Metric = names(ridge.train.res),
                       `Ridge logistic, test` = ridge.test.res,
                       `SVM linear kernel, test` = svm.lin.test.res,
                       `SVM radial kernel, test` = svm.rad.test.res)
+```
 
+Using the optimal cutoff, the confusion matrix for prediction on testing dataset and the ROC curve are shown below. 
+
+```{r ResultRidge2}
+confusionMatrix(factor(ridge.pred.test, levels = c('no', 'yes')), dat_test$y, positive = 'yes')$table
+
+plot(prf.ridge.test, col = "red", main='Figure 6: ROC plot for ridge logistic regression model')
+lines(x = c(0,1), y = c(0,1),col="black")
+text(0.5, 0.3, paste0("AUC = ",round(ridge.auc, 2)),
+     cex=0.65, pos=3,col="red") 
+```
+
+For SVM with linear kernel, the confusion matrix for prediction on testing dataset are shown below.
+
+```{r linearSVM}
+# display results
+confusionMatrix(svm.pred.lin.test, dat_test$y, positive = 'yes')$table
+```
+
+For SVM with radial kernel, the confusion matrix for prediction on testing dataset are shown below.
+
+```{r radialSVM}
+# display results
+confusionMatrix(svm.pred.rad.test, dat_test$y, positive = 'yes')$table
+```
+
+Table 3 shows all the model performance evaluation metrics using three methods on training and testing datasets.
+
+```{r ResultAll2}
 # display results
 kable(pred_metrics, caption='Table 3', 
       digits=3, format='html', row.names=FALSE)
 ```
 
-The chosen $\lambda$ for ridge logistic regression was 0.013. For the SVM models, the chosen cost hyperparameter for the linear kernel was 0.1, and for the RBF kernel, the chosen cost and $\gamma$ were 1 and 0.125, respectively. The numbers of support vectors are 5370 and 5490, respectively, for linear and kernel SVM.
+<br>
 
-Form the three confusion matrices above, we can see that the F1 score for ridge logistic regression and radial kernel SVM are similar (0.359 and 0.355), while the F1 score for linear SVM is smaller (0.327). Comparing the two SVM models, radial kernel is overall better than linear kernel in the sense of sensitivity and specificity additional to F1 score. However, it is not straightforward to tell whether the radial SVM is better than the ridge logistic regression. The former has higher sensitivity (0.63 over 0.39), while the latter has higher specificity (0.89 over 0.75).
+From the three confusion matrices above, we can see that the F1 score for ridge logistic regression and radial kernel SVM are similar (0.359 and 0.355), while the F1 score for linear SVM is smaller (0.327). Comparing the two SVM models, radial kernel is overall better than linear kernel in the sense of sensitivity and specificity additional to F1 score. However, it is not straightforward to tell whether the radial SVM is better than the ridge logistic regression. The former has higher sensitivity (0.63 over 0.39), while the latter has higher specificity (0.89 over 0.75).
 
 ### Variables of interest
-Table 2 shows the regularized coefficient of each predictor from ridge logistic regression model. According to the ridge logistic regression, we found several variables contributing the success of telemarketing. The strongest predictor is the outcome of previous telemarketing campaign ($\hat{\beta}=2.15$), which means a client is much more likely to make a deposit if the client made a deposit in the previous telemarketing campaign. This finding suggests that targeting existing client is the most efficient way of telemarketing in our analysis. The second most predictive variable is job type. In our analysis, we found clients that are entrepreneur are the least likely to make a deposit ($\hat{\beta}=-1.39$), followed by self-employed ($\hat{\beta}=-0.51$) and blue collar ($\hat{\beta}=-0.47$). On the contrary, retired client is more likely to make a deposit ($\hat{\beta}=0.31$). Interestingly, married person, home owner and person with loan  are less likely to contribute a deposit ($\hat{\beta}=-0.65$), ($\hat{\beta}=-0.74$) and ($\hat{\beta}=-0.52$) respectively, which indicate they are probably the same group of people.
+Table 4 shows the regularized coefficient of each predictor from ridge logistic regression model. According to the ridge logistic regression, we found several variables contributing the success of telemarketing. The strongest predictor is the outcome of previous telemarketing campaign ($\hat{\beta}=2.15$), which means a client is much more likely to make a deposit if the client made a deposit in the previous telemarketing campaign. This finding suggests that targeting existing client is the most efficient way of telemarketing in our analysis. The second most predictive variable is job type. In our analysis, we found clients that are entrepreneur are the least likely to make a deposit ($\hat{\beta}=-1.39$), followed by self-employed ($\hat{\beta}=-0.51$) and blue collar ($\hat{\beta}=-0.47$). On the contrary, retired client is more likely to make a deposit ($\hat{\beta}=0.31$). Interestingly, married person, home owner and person with loan  are less likely to contribute a deposit ($\hat{\beta}=-0.65$), ($\hat{\beta}=-0.74$) and ($\hat{\beta}=-0.52$) respectively, which indicate they are probably the same group of people.
 
 
 ```{r regressionCoefficient2}

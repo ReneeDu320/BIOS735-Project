@@ -49,6 +49,27 @@ glm.logit.ridge <- function(X, y, lambda=1, tol = 1e-7, maxit = 50,trace=FALSE) 
   n = dim(X)[1]
   p = dim(X)[2]
   
+  
+  ## check for input error
+  if(n != length(y)){
+    stop('Sample size (n) of X and y should be equal')
+  }
+  if(n < p){
+    stop('Sample size (n) should be greater than p')
+  }
+  if(!is.numeric(X)){
+    stop('X is not numeric')
+  }
+  if(!is.numeric(y)){
+    stop('y is not numeric')
+  }
+  if(lambda < 0){
+    stop('lambda should be greater than 0')
+  }
+  
+  
+  
+  
   # intialize beta values
   intercept  = log(mean(y) / (1 - mean(y)))   # intercept
   beta_t = c(intercept, rep(0, p-1))

@@ -14,11 +14,11 @@ The data used in this project is related with direct marketing campaigns of a Po
 
 ### Data Processing and Report  
 
-A copy of the initial project proposal 'Updated_proposal BIOS735 Team6.pdf' and final project report 'final_report.html' are kept in this folder. The presentation for the report can be found [here](https://docs.google.com/presentation/d/1EZ85oHhNHWCJr9l-fvAzzVQnlLNpCdSaWfzGy-WKoKk/edit?usp=sharing)
+A copy of the initial project proposal (`Updated_proposal BIOS735 Team6.pdf` )and final project report (`final_report.html` and `final_report.Rmd`)are kept in this folder. The presentation for the report can be found [here](https://docs.google.com/presentation/d/1EZ85oHhNHWCJr9l-fvAzzVQnlLNpCdSaWfzGy-WKoKk/edit?usp=sharing)
 
 ### Package 
 
-Our R-package implementation is kept in 'final' folder. For more information about the functions please refer to the report.
+Our R-package implementation is kept in `final` folder. For more information about the functions please refer to the report.
 
 To install the package, download the file `final_0.0.0.9000.tar.gz`, navigate to its directory, and run `install.packages("final_0.0.0.9000.tar.gz", repos=NULL)`. You can then load the package as usual using `library(final)`. 
 
